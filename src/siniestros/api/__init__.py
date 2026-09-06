@@ -32,6 +32,11 @@ def create_app(iniciar_broker: bool = True) -> Flask:
     from config.db import crear_tablas
     crear_tablas()
 
+    if iniciar_broker:
+        from seedwork.infraestructura.broker import configurar_namespace_multiesquema
+        from config.settings import PULSAR_ADMIN_URL
+        configurar_namespace_multiesquema(PULSAR_ADMIN_URL)
+
     _importar_handlers_de_comandos_y_queries()
     _registrar_suscripciones_de_eventos()
 

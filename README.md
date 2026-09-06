@@ -138,7 +138,7 @@ El servicio está listo cuando `GET /salud` responde `{"estado":"ok"}`.
 Registrar un siniestro (comando por HTTP):
 
 ```bash
-curl -X POST http://localhost:5000/siniestros \
+curl -X POST http://localhost:8000/siniestros \
   -H "Content-Type: application/json" \
   -d '{"partner_id":"aseguradora-1","poliza":"POL-123","monto":500000,
        "moneda":"COP","calle":"Cra 7 # 1-2","ciudad":"Bogota"}'
@@ -147,14 +147,14 @@ curl -X POST http://localhost:5000/siniestros \
 Consultar el estado (lee la proyección de `seguimiento`):
 
 ```bash
-curl http://localhost:5000/siniestros/<id>
-curl http://localhost:5000/partners/aseguradora-1/siniestros
+curl http://localhost:8000/siniestros/<id>
+curl http://localhost:8000/partners/aseguradora-1/siniestros
 ```
 
 Asignar un proveedor:
 
 ```bash
-curl -X POST http://localhost:5000/siniestros/<id>/proveedor \
+curl -X POST http://localhost:8000/siniestros/<id>/proveedor \
   -H "Content-Type: application/json" -d '{"proveedor_id":"prov-9"}'
 ```
 

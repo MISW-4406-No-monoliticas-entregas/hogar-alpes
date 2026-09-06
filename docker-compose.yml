@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: siniestros
       POSTGRES_DB: siniestros
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -41,12 +41,13 @@ services:
       DB_PASSWORD: siniestros
       DB_NAME: siniestros
       PULSAR_URL: pulsar://pulsar:6650
+      PULSAR_ADMIN_URL: http://pulsar:8080
       TOPICO_EVENTOS: eventos.trabajos
       TOPICO_COMANDOS: comandos.siniestros
       CONSUMIR_COMANDOS: "true"
       PORT: "5000"
     ports:
-      - "5000:5000"
+      - "8000:5000"
 
 volumes:
   pgdata:

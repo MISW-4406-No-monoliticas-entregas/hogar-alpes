@@ -27,6 +27,7 @@ def _bd_url() -> str:
 DATABASE_URL = _bd_url()
 
 PULSAR_URL = os.getenv("PULSAR_URL", "pulsar://localhost:6650")
+PULSAR_ADMIN_URL = os.getenv("PULSAR_ADMIN_URL", "http://localhost:8080")
 TOPICO_EVENTOS = os.getenv("TOPICO_EVENTOS", "eventos.trabajos")
 TOPICO_COMANDOS = os.getenv("TOPICO_COMANDOS", "comandos.siniestros")
 SUSCRIPCION = os.getenv("PULSAR_SUSCRIPCION", "trabajos-siniestros")
