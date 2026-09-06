@@ -1,8 +1,4 @@
-"""Fábrica de repositorios del módulo siniestros (infraestructura).
-
-Permite obtener el adaptador concreto de repositorio a partir de una sesión, sin
-que quien lo pide conozca la clase concreta.
-"""
+"""Fábrica de repositorios del módulo siniestros."""
 from modulos.siniestros.infraestructura.repositorios import (
     RepositorioSiniestrosSQLAlchemy,
 )

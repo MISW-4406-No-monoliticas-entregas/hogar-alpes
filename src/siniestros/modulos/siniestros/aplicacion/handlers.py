@@ -1,12 +1,4 @@
-"""Handlers de eventos de dominio del módulo siniestros.
-
-Se suscriben (por señales) a los eventos de dominio y los traducen a eventos de
-INTEGRACIÓN que se publican en Pulsar (tópico eventos.trabajos) para el resto de
-la arquitectura. Esto convive con la actualización de la proyección que hace
-seguimiento: ambos reaccionan al mismo evento de dominio, desacoplados.
-
-Importar este módulo registra las suscripciones (efecto de import).
-"""
+"""Handlers que traducen eventos de dominio a eventos de integración en Pulsar."""
 from seedwork.aplicacion.eventos import suscribirse_a_evento
 from modulos.siniestros.dominio.eventos import (
     SiniestroRegistrado,

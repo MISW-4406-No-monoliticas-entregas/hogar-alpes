@@ -1,11 +1,4 @@
-"""Prueba de integración del flujo de eventos entre módulos (in-process).
-
-Valida el ítem 4 (comunicación por eventos de dominio) y la proyección de CQRS
-SIN base de datos ni broker: se emite un evento de dominio por el mediador de
-señales del seedwork y se verifica que el módulo `seguimiento` reacciona y
-actualiza su proyección. `seguimiento` se suscribe por NOMBRE de evento, sin
-importar ninguna clase del módulo `siniestros`.
-"""
+"""Pruebas del flujo de eventos de dominio hacia la proyección."""
 import pytest
 
 from seedwork.aplicacion.eventos import despachar_evento_dominio

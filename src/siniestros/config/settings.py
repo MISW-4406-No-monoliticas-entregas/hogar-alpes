@@ -1,18 +1,9 @@
-"""Configuración por variables de entorno (valores de desarrollo por defecto).
-
-Ítem "repositorio público sin credenciales": todo sale de variables de entorno;
-los defaults son de desarrollo y coinciden con los del docker-compose.
-"""
+"""Configuración por variables de entorno."""
 import os
 
 
 def _bd_url() -> str:
-    """Devuelve la URL de la base de datos.
-
-    Si existe la variable DATABASE_URL se usa completa (plataformas que la
-    exponen directamente, o pruebas con un motor sin driver Postgres). Si no,
-    se arma la URL de PostgreSQL desde sus partes (caso Docker).
-    """
+    """URL de la base: DATABASE_URL si existe, si no se arma desde sus partes."""
     url_completa = os.getenv("DATABASE_URL")
     if url_completa:
         return url_completa

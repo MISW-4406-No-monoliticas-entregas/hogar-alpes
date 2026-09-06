@@ -1,8 +1,4 @@
-"""Manejo de errores para la API (adaptador de entrada HTTP).
-
-Traduce excepciones de dominio a respuestas HTTP sin que los blueprints tengan
-que conocer los detalles. Mantiene la capa web delgada (ítem 2).
-"""
+"""Manejo de errores de la API."""
 from flask import jsonify
 
 from seedwork.dominio.excepciones import ExcepcionDominio, ReglaNegocioExcepcion

@@ -1,4 +1,4 @@
-"""Query ListarSiniestrosPorPartner + handler (lado de lectura, CQS)."""
+"""Query ListarSiniestrosPorPartner y su handler."""
 from dataclasses import dataclass
 
 from seedwork.aplicacion.queries import (

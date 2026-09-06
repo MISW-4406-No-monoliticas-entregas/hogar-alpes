@@ -1,4 +1,4 @@
-"""DTOs de aplicación del módulo siniestros (frontera con la API/broker)."""
+"""DTOs de aplicación del módulo siniestros."""
 from dataclasses import dataclass, field
 
 from seedwork.aplicacion.dto import DTO

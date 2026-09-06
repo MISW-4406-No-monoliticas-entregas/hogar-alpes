@@ -23,24 +23,20 @@ from modulos.siniestros.dominio.reglas import (
 
 @dataclass
 class Evidencia(Entidad):
-    """Entidad hija: solo tiene sentido dentro del agregado Siniestro."""
+    """Entidad hija del agregado Siniestro."""
     descripcion: str = ""
     url: str = ""
 
 
 @dataclass
 class Actividad(Entidad):
-    """Entidad hija: registra hechos del ciclo de vida del siniestro."""
+    """Entidad hija del agregado Siniestro."""
     descripcion: str = ""
 
 
 @dataclass
 class Siniestro(AgregacionRaiz):
-    """Raíz del agregado. Guarda las invariantes y emite eventos de dominio.
-
-    El acceso a las hijas (Evidencia, Actividad) pasa siempre por la raíz: nadie
-    fuera del agregado modifica una hija directamente (ítem 1, agregación con raíz).
-    """
+    """Agregado raíz del siniestro."""
     partner_id: PartnerId = None
     poliza: Poliza = None
     monto: Monto = None
@@ -51,11 +47,7 @@ class Siniestro(AgregacionRaiz):
     actividades: list[Actividad] = field(default_factory=list)
 
     def registrar(self):
-        """Aplica las invariantes de registro y emite SiniestroRegistrado.
-
-        Se llama desde la fábrica al construir un siniestro nuevo. Concentrar
-        aquí las reglas garantiza que ningún siniestro exista en estado inválido.
-        """
+        """Valida las reglas de registro y emite SiniestroRegistrado."""
         self.validar_regla(LaPolizaEsObligatoria(self.poliza))
         self.validar_regla(ElMontoEstimadoDebeSerPositivo(self.monto))
 
@@ -73,7 +65,7 @@ class Siniestro(AgregacionRaiz):
         )
 
     def asignar_proveedor(self, proveedor_id: str):
-        """Regla: solo se asigna si está en estado REGISTRADO."""
+        """Asigna un proveedor y emite ProveedorAsignado."""
         self.validar_regla(ElSiniestroDebeEstarRegistradoParaAsignar(self.estado))
 
         self.proveedor_id = proveedor_id

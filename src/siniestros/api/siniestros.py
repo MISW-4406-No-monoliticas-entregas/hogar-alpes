@@ -1,8 +1,4 @@
-"""Blueprint de la API HTTP (adaptador de entrada).
-
-La capa web es delgada: traduce HTTP a comandos/queries y despacha por los
-mediadores. No contiene reglas de negocio ni toca la BD directamente (ítem 2).
-"""
+"""Blueprint de la API HTTP."""
 import dataclasses
 
 from flask import Blueprint, request, jsonify

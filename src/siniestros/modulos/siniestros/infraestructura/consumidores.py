@@ -1,10 +1,4 @@
-"""Consumidor del tópico comandos.siniestros (adaptador de entrada por broker).
-
-Permite que RegistrarSiniestro llegue también por Pulsar (no solo por HTTP). Lee
-el comando Avro, lo traduce al comando de aplicación y lo despacha por el
-mediador de comandos (singledispatch). Se ejecuta en un hilo propio y usa
-suscripción Shared para que varias réplicas del servicio repartan la carga.
-"""
+"""Consumidor del tópico comandos.siniestros."""
 import logging
 import time
 
@@ -24,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 def suscribirse_a_comandos(url_broker: str = PULSAR_URL):
-    """Bucle bloqueante: consume comandos.siniestros hasta que el proceso muera."""
+    """Consume el tópico comandos.siniestros y despacha cada comando."""
     cliente = pulsar.Client(url_broker)
     consumidor = cliente.subscribe(
         TOPICO_COMANDOS,

@@ -1,8 +1,4 @@
-"""Pruebas unitarias de las reglas de negocio del agregado Siniestro.
-
-Prueban el dominio de forma aislada: sin BD, sin broker, sin framework web.
-Es lo que valida el ítem 1 de la rúbrica (reglas de negocio en el agregado).
-"""
+"""Pruebas unitarias de las reglas de negocio del agregado Siniestro."""
 import pytest
 
 from seedwork.dominio.excepciones import ReglaNegocioExcepcion

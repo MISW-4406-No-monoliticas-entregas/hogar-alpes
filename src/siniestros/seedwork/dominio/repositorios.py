@@ -1,9 +1,4 @@
-"""Repositorios: interfaz (puerto) en el dominio.
-
-Ítem 2 (hexagonal): la interfaz vive en el dominio y la implementación concreta
-(SQLAlchemy/PostgreSQL) vive en infraestructura. El dominio depende de la
-abstracción, nunca al revés.
-"""
+"""Interfaz base de repositorio."""
 import uuid
 from abc import ABC, abstractmethod
 

@@ -1,8 +1,4 @@
-"""Consultas y su mediador (patrón CQS, lado de lectura).
-
-Las queries NO modifican estado: leen la proyección del módulo seguimiento.
-Se despachan por tipo con singledispatch, simétrico a los comandos.
-"""
+"""Query base y mediador de consultas (singledispatch)."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import singledispatch

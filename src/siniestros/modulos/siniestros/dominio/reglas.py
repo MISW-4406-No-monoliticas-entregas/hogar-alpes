@@ -1,8 +1,4 @@
-"""Reglas de negocio del agregado Siniestro.
-
-Cada regla es un objeto con es_valido(); el agregado las valida con
-self.validar_regla(...). Se prueban unitariamente en tests/test_reglas.py.
-"""
+"""Reglas de negocio del agregado Siniestro."""
 from dataclasses import dataclass
 
 from seedwork.dominio.reglas import ReglaNegocio

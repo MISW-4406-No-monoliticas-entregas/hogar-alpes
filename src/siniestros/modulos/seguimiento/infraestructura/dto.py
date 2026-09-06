@@ -1,9 +1,4 @@
-"""Modelo SQLAlchemy de la proyección (tabla `estado_siniestro`).
-
-Tabla de lectura separada de `siniestros` (CQRS): la escritura y la lectura no
-comparten tabla, lo que permite escalarlas y optimizarlas por separado
-(atributo de calidad: escalabilidad, Entrega 4).
-"""
+"""Modelo SQLAlchemy de la tabla estado_siniestro (proyección)."""
 from sqlalchemy import Column, String, Float, DateTime
 
 from config.db import Base

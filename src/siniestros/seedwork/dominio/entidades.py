@@ -9,10 +9,7 @@ from seedwork.dominio.mixins import ValidarReglasMixin
 
 @dataclass
 class Entidad:
-    """Entidad con identidad propia (id) y trazabilidad temporal.
-
-    La identidad, no los atributos, define la igualdad de una entidad.
-    """
+    """Entidad con identidad propia; su igualdad se basa en el id."""
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     _fecha_creacion: datetime = field(default_factory=datetime.utcnow)
     _fecha_actualizacion: datetime = field(default_factory=datetime.utcnow)
@@ -37,14 +34,7 @@ class Entidad:
 
 @dataclass
 class AgregacionRaiz(Entidad, ValidarReglasMixin):
-    """Raíz de un agregado.
-
-    Decisión de diseño: el agregado ACUMULA eventos de dominio (agregar_evento)
-    pero NO los publica. Publicar/despachar es responsabilidad de la Unidad de
-    Trabajo tras confirmar la transacción. Así el dominio permanece libre de
-    infraestructura (ítem 2, hexagonal) y las señales/Pulsar se disparan solo
-    cuando el estado quedó persistido de forma consistente.
-    """
+    """Raíz de un agregado; acumula eventos de dominio."""
     eventos: list[EventoDominio] = field(default_factory=list)
 
     def agregar_evento(self, evento: EventoDominio):

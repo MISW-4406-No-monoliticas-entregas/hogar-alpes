@@ -1,9 +1,4 @@
-"""Punto de entrada del servicio Trabajos Siniestros.
-
-Arranca la app Flask y, en un hilo aparte, el consumidor del tópico de comandos
-(comandos.siniestros). Así el comando RegistrarSiniestro entra tanto por HTTP
-como por el broker, compartiendo el mismo mediador de comandos.
-"""
+"""Punto de entrada: app Flask y consumidor de comandos.siniestros."""
 import logging
 import os
 import threading

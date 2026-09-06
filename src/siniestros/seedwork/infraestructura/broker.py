@@ -1,14 +1,4 @@
-"""Configuración del broker vía la API de administración de Pulsar.
-
-El tópico eventos.trabajos transporta VARIOS tipos de evento de integración
-(SiniestroRegistrado, ProveedorAsignado, ...). Cada tipo tiene su propio esquema
-Avro. Por defecto Pulsar aplica una política de compatibilidad estricta sobre el
-esquema del tópico y rechaza un segundo esquema distinto (IncompatibleSchema).
-
-Para permitir múltiples esquemas en un mismo tópico, Pulsar documenta fijar la
-estrategia de compatibilidad del namespace a ALWAYS_COMPATIBLE. Se hace una sola
-vez al arrancar el servicio; si el broker aún no responde, se reintenta.
-"""
+"""Configuración del broker vía la API de administración de Pulsar."""
 import json
 import logging
 import time

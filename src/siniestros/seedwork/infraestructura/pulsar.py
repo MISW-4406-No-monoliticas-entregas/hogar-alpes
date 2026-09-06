@@ -1,11 +1,4 @@
-"""Adaptadores base para Apache Pulsar (puertos de salida/entrada al broker).
-
-- Despachador: publica eventos/comandos de integración con esquema Avro.
-- Consumidor: escucha un tópico y delega el mensaje a un handler.
-
-Son clases base; cada módulo define su Despachador/Consumidor concretos con sus
-esquemas Avro (schema/v1). El dominio no conoce ninguna de estas clases.
-"""
+"""Adaptadores base para Apache Pulsar."""
 from abc import ABC, abstractmethod
 
 import pulsar
@@ -32,8 +25,6 @@ class Despachador(ABC):
 
 
 class Consumidor(ABC):
-    """Adaptador de entrada: consume un tópico de Pulsar en un hilo propio."""
-
     def __init__(self, url_broker: str):
         self._url_broker = url_broker
 

@@ -1,15 +1,11 @@
-"""Fábrica de la aplicación Flask (composition root del adaptador HTTP)."""
+"""Fábrica de la aplicación Flask."""
 import logging
 
 from flask import Flask, jsonify
 
 
 def _registrar_suscripciones_de_eventos():
-    """Registra los handlers de eventos de dominio (señales) de ambos módulos.
-
-    Debe ejecutarse una sola vez al arrancar el proceso, ANTES de atender
-    comandos, para que las proyecciones y la publicación a Pulsar reaccionen.
-    """
+    """Registra los handlers de eventos de dominio de ambos módulos."""
     from modulos.siniestros.aplicacion import handlers as h_siniestros
     from modulos.seguimiento.aplicacion import handlers as h_seguimiento
 
@@ -18,7 +14,7 @@ def _registrar_suscripciones_de_eventos():
 
 
 def _importar_handlers_de_comandos_y_queries():
-    """Importa los módulos que registran los handlers de singledispatch."""
+    """Importa los módulos que registran los handlers de comandos y queries."""
     from modulos.siniestros.aplicacion.comandos import registrar_siniestro
     from modulos.siniestros.aplicacion.comandos import asignar_proveedor
     from modulos.seguimiento.aplicacion.queries import obtener_estado_siniestro

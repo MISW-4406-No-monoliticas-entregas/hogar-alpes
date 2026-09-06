@@ -1,4 +1,4 @@
-"""Comando AsignarProveedor + su handler (lado de escritura, CQS)."""
+"""Comando AsignarProveedor y su handler."""
 import uuid
 from dataclasses import dataclass
 

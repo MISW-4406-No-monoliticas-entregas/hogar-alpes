@@ -1,8 +1,4 @@
-"""Eventos de dominio del módulo siniestros (participio pasado).
-
-Los emite el agregado y los despacha la UoW. El módulo seguimiento se suscribe
-a ellos por nombre de clase, sin importar este módulo.
-"""
+"""Eventos de dominio del módulo siniestros."""
 import uuid
 from dataclasses import dataclass, field
 

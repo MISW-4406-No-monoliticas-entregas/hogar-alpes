@@ -1,8 +1,4 @@
-"""Vistas: ejecutan la lectura sobre la proyección y arman el modelo de lectura.
-
-Separan la mecánica de consulta (repositorio) de la representación devuelta a la
-API. Las queries de aplicación llaman a estas vistas.
-"""
+"""Vistas de lectura sobre la proyección estado_siniestro."""
 from modulos.seguimiento.infraestructura.repositorios import (
     RepositorioEstadoSiniestro,
 )

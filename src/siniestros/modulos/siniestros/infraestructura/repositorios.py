@@ -1,9 +1,4 @@
-"""Implementación del repositorio de siniestros (adaptador de salida).
-
-Implementa el puerto RepositorioSiniestros del dominio usando SQLAlchemy sobre
-PostgreSQL. Traduce con el mapeador de infraestructura. No confirma la
-transacción: eso es responsabilidad de la Unidad de Trabajo.
-"""
+"""Repositorio de siniestros con SQLAlchemy."""
 import uuid
 
 from modulos.siniestros.dominio.repositorios import RepositorioSiniestros

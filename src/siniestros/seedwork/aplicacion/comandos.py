@@ -1,9 +1,4 @@
-"""Comandos y su mediador (patrón CQS, lado de escritura).
-
-El mediador usa functools.singledispatch: cada comando concreto registra su
-handler y ejecutar_comando(comando) despacha al handler correcto por tipo.
-Igual que en los tutoriales del curso.
-"""
+"""Comando base y mediador de comandos (singledispatch)."""
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import singledispatch
@@ -11,7 +6,6 @@ from functools import singledispatch
 
 @dataclass
 class Comando:
-    """Marca un mensaje de intención de cambio de estado (imperativo)."""
     ...
 
 

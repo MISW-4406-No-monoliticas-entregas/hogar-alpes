@@ -1,8 +1,4 @@
-"""Mapeador de aplicación: DTO <-> objetos valor de dominio.
-
-Traduce la representación plana (DTO, primitivos que entran por HTTP/broker) a
-los objetos valor del dominio. La API y el consumidor no arman objetos valor.
-"""
+"""Mapeador de aplicación: DTO a objetos valor de dominio."""
 from seedwork.aplicacion.mapeadores import Mapeador
 from modulos.siniestros.dominio.entidades import Siniestro
 from modulos.siniestros.dominio.objetos_valor import (
@@ -16,7 +12,6 @@ from modulos.siniestros.aplicacion.dto import SiniestroDTO
 
 class MapeadorSiniestro(Mapeador):
     def dto_a_entidad(self, dto: SiniestroDTO) -> Siniestro:
-        """No se usa para crear (eso lo hace la fábrica); existe por simetría."""
         raise NotImplementedError
 
     def dto_a_objetos_valor(self, dto: SiniestroDTO):

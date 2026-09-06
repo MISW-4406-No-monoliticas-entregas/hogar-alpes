@@ -1,8 +1,4 @@
-"""Despachador de eventos de integración a Pulsar (adaptador de salida).
-
-Traduce un evento de DOMINIO a un evento de INTEGRACIÓN Avro y lo publica en el
-tópico eventos.trabajos. Es el puente hacia el resto de la arquitectura.
-"""
+"""Despachador de eventos de integración a Pulsar."""
 from seedwork.infraestructura.pulsar import Despachador
 from seedwork.infraestructura.utils import tiempo_actual_ms, generar_uuid
 from config.settings import PULSAR_URL, TOPICO_EVENTOS
@@ -23,7 +19,6 @@ class DespachadorEventos(Despachador):
         super().__init__(url_broker)
 
     def publicar_evento(self, evento, topico: str):
-        """No usado directamente; se prefieren los métodos tipados de abajo."""
         raise NotImplementedError
 
     def publicar_siniestro_registrado(self, evento: SiniestroRegistrado):

@@ -1,0 +1,215 @@
+{
+  "info": {
+    "name": "Trabajos Siniestros",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000" },
+    { "key": "partnerId", "value": "aseguradora-1" },
+    { "key": "siniestroId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Flujo principal",
+      "item": [
+        {
+          "name": "Salud",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/salud",
+              "host": ["{{baseUrl}}"],
+              "path": ["salud"]
+            }
+          }
+        },
+        {
+          "name": "Registrar siniestro",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.id) { pm.collectionVariables.set('siniestroId', json.id); }",
+                  "pm.test('status 201', function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"aseguradora-1\",\n  \"poliza\": \"POL-123\",\n  \"monto\": 500000,\n  \"moneda\": \"COP\",\n  \"calle\": \"Cra 7 # 1-2\",\n  \"ciudad\": \"Bogota\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/siniestros",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros"]
+            }
+          }
+        },
+        {
+          "name": "Obtener siniestro",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/siniestros/{{siniestroId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros", "{{siniestroId}}"]
+            }
+          }
+        },
+        {
+          "name": "Asignar proveedor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proveedor_id\": \"prov-9\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/siniestros/{{siniestroId}}/proveedor",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros", "{{siniestroId}}", "proveedor"]
+            }
+          }
+        },
+        {
+          "name": "Obtener siniestro asignado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/siniestros/{{siniestroId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros", "{{siniestroId}}"]
+            }
+          }
+        },
+        {
+          "name": "Listar siniestros por partner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/partners/{{partnerId}}/siniestros",
+              "host": ["{{baseUrl}}"],
+              "path": ["partners", "{{partnerId}}", "siniestros"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reglas y errores",
+      "item": [
+        {
+          "name": "Registrar monto no positivo",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"aseguradora-1\",\n  \"poliza\": \"POL-1\",\n  \"monto\": 0,\n  \"moneda\": \"COP\",\n  \"calle\": \"c\",\n  \"ciudad\": \"Bogota\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/siniestros",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros"]
+            }
+          }
+        },
+        {
+          "name": "Registrar poliza vacia",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"aseguradora-1\",\n  \"poliza\": \"   \",\n  \"monto\": 100,\n  \"moneda\": \"COP\",\n  \"calle\": \"c\",\n  \"ciudad\": \"Bogota\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/siniestros",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros"]
+            }
+          }
+        },
+        {
+          "name": "Registrar faltan campos",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"aseguradora-1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/siniestros",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros"]
+            }
+          }
+        },
+        {
+          "name": "Asignar sobre siniestro ya asignado",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proveedor_id\": \"otro-prov\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/siniestros/{{siniestroId}}/proveedor",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros", "{{siniestroId}}", "proveedor"]
+            }
+          }
+        },
+        {
+          "name": "Obtener siniestro inexistente",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/siniestros/00000000-0000-0000-0000-000000000000",
+              "host": ["{{baseUrl}}"],
+              "path": ["siniestros", "00000000-0000-0000-0000-000000000000"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

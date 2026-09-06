@@ -1,8 +1,4 @@
-"""Mapeador de infraestructura: agregado de dominio <-> modelo SQLAlchemy.
-
-Aísla al dominio del ORM. El repositorio usa este mapeador para ir y volver
-entre Siniestro (dominio) y SiniestroDTO (persistencia).
-"""
+"""Mapeador entre el agregado Siniestro y su modelo SQLAlchemy."""
 from modulos.siniestros.dominio.entidades import Siniestro, Evidencia, Actividad
 from modulos.siniestros.dominio.objetos_valor import (
     PartnerId,

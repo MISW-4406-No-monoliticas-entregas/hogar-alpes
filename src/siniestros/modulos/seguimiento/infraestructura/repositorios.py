@@ -1,9 +1,4 @@
-"""Repositorio de lectura de la proyección estado_siniestro.
-
-Encapsula el acceso a la tabla de lectura: upsert desde los handlers de eventos
-y consultas para las queries. Cada operación abre y cierra su propia sesión
-(las lecturas son independientes y así se pueden escalar réplicas de lectura).
-"""
+"""Repositorio de lectura de la proyección estado_siniestro."""
 from datetime import datetime
 
 from config.db import SessionLocal
@@ -12,7 +7,6 @@ from modulos.seguimiento.infraestructura.dto import EstadoSiniestroDTO
 
 class RepositorioEstadoSiniestro:
     def registrar_o_actualizar(self, **campos):
-        """Upsert de una fila de la proyección por id_siniestro."""
         session = SessionLocal()
         try:
             fila = session.get(EstadoSiniestroDTO, campos["id_siniestro"])

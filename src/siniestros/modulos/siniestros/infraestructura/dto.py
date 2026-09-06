@@ -1,9 +1,4 @@
-"""Modelo SQLAlchemy del lado de escritura (tabla `siniestros`).
-
-Es un DTO de persistencia, no una entidad de dominio: por eso vive en infra.
-Las entidades hijas (evidencias, actividades) se guardan como JSON dentro de la
-misma fila del agregado (dos tablas bastan, según la rúbrica).
-"""
+"""Modelo SQLAlchemy de la tabla siniestros (escritura)."""
 from sqlalchemy import Column, String, Float, DateTime, JSON
 
 from config.db import Base

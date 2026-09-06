@@ -1,13 +1,4 @@
-"""SQLAlchemy sobre PostgreSQL (adaptador de persistencia).
-
-Expone la Base declarativa compartida y una fábrica de sesiones. Los modelos
-(DTO SQLAlchemy) de cada módulo heredan de Base; la UoW usa SessionLocal.
-
-El engine se crea de forma perezosa (lazy): SQLAlchemy resuelve el driver de la
-base al construir el engine, así que diferir su creación permite importar esta
-capa sin exigir el driver hasta que realmente se abre una sesión. La aplicación
-usa siempre PostgreSQL; las pruebas de dominio no tocan la base.
-"""
+"""SQLAlchemy sobre PostgreSQL. El engine se crea de forma perezosa."""
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -34,17 +25,13 @@ def get_engine():
 
 
 def SessionLocal():
-    """Fábrica de sesiones: crea el engine en el primer uso y devuelve una sesión."""
+    """Devuelve una sesión, creando el engine en el primer uso."""
     _inicializar()
     return _session_factory()
 
 
 def crear_tablas():
-    """Crea las tablas si no existen.
-
-    El import de los modelos es diferido para evitar dependencias circulares y
-    para registrarlos en la metadata de la Base antes de create_all.
-    """
+    """Crea las tablas si no existen."""
     from modulos.siniestros.infraestructura import dto as _dto_siniestros
     from modulos.seguimiento.infraestructura import dto as _dto_seguimiento
 

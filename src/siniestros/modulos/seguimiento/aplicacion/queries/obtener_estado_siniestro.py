@@ -1,4 +1,4 @@
-"""Query ObtenerEstadoSiniestro + handler (lado de lectura, CQS)."""
+"""Query ObtenerEstadoSiniestro y su handler."""
 from dataclasses import dataclass
 
 from seedwork.aplicacion.queries import (

@@ -1,9 +1,4 @@
-"""Modelo de lectura del módulo seguimiento.
-
-EstadoDeSiniestro es una proyección: una vista desnormalizada optimizada para
-consulta (CQRS). No tiene reglas de negocio; se construye a partir de los
-eventos de dominio que emite el módulo siniestros.
-"""
+"""Modelo de lectura (proyección) del módulo seguimiento."""
 from dataclasses import dataclass
 from datetime import datetime
 

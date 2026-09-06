@@ -1,4 +1,4 @@
-"""Comando RegistrarSiniestro + su handler (lado de escritura, CQS)."""
+"""Comando RegistrarSiniestro y su handler."""
 from dataclasses import dataclass
 
 from seedwork.aplicacion.comandos import Comando, ComandoHandler, ejecutar_comando
@@ -10,7 +10,6 @@ from modulos.siniestros.aplicacion.servicios import nueva_uow, repositorio_en
 
 @dataclass
 class RegistrarSiniestro(Comando):
-    """Intención: registrar un siniestro que envía un partner (imperativo)."""
     partner_id: str
     poliza: str
     monto: float
