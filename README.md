@@ -32,6 +32,20 @@ Cada evento de dominio se despacha de dos maneras complementarias:
 El comando `RegistrarSiniestro` puede llegar tanto por HTTP como por el tópico
 `comandos.siniestros`, porque en producción la carga real entra por el broker.
 
+## Diagramas
+
+Arquitectura de alto nivel:
+
+![Arquitectura de alto nivel](docs/diagramas/01-arquitectura.svg)
+
+Flujo de una petición (comando → evento → proyección → consulta):
+
+![Flujo de una petición](docs/diagramas/02-flujo.svg)
+
+Capas (arquitectura hexagonal):
+
+![Capas hexagonales](docs/diagramas/03-hexagonal.svg)
+
 ## Modelo de dominio
 
 - **Agregado raíz:** `Siniestro`, con entidades hijas `Evidencia` y `Actividad`.
