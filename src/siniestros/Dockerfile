@@ -1,3 +1,4 @@
+# Cada servicio es autocontenido: su contexto de build es su propia carpeta.
 FROM python:3.12-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -9,10 +10,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY src/ ./src/
+# El contexto de build es src/siniestros, así que copiamos todo el servicio.
+COPY . .
 
-ENV PYTHONPATH=/app/src/siniestros
-WORKDIR /app/src/siniestros
+ENV PYTHONPATH=/app
 
 EXPOSE 5000
 
