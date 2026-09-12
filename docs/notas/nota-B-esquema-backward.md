@@ -52,13 +52,21 @@ quitar un campo o cambiar un tipo sin default = escenario 6 demostrable).
 Es un cambio **aditivo en 2 archivos**. `handlers.py` y los tests **no cambian**
 (conservo las firmas de los métodos del despachador).
 
+> ⚠️ **Bug latente que encontré al verificar la plantilla:** `pulsar.schema.Record`
+> **NO hereda los campos de la clase base** (su metaclase solo lee el namespace de
+> la clase concreta). Hoy `EventoIntegracion(Mensaje)` con solo `data` genera un
+> esquema Avro que **pierde** `id`, `time`, `spec_version` y `type`: se serializan
+> como null y al consumir `sobre.type` devuelve el descriptor, no el valor. En la
+> E3 no se notó porque nadie consumía del broker. Por eso, en el refactor de abajo,
+> los 4 campos del sobre van **declarados directamente en `EventoSiniestros`**, no
+> heredados. (Lo mismo aplica a `ComandoRegistrarSiniestro`: si algún consumidor va
+> a despachar por `type`, hay que declararle los campos del sobre.)
+
 ### `modulos/siniestros/infraestructura/schema/v1/eventos.py`
 
 ```python
 """Esquema Avro v1: un sobre único por tópico para eventos.siniestros."""
-from pulsar.schema import Record, String, Float
-
-from seedwork.infraestructura.schema.v1.mensajes import EventoIntegracion
+from pulsar.schema import Record, String, Float, Long
 
 
 class DatosSiniestro(Record):
@@ -73,9 +81,12 @@ class DatosSiniestro(Record):
     estado = String(required=False, default="")
 
 
-class EventoSiniestros(EventoIntegracion):
-    # El tipo concreto va en `type` del sobre (heredado de Mensaje):
-    # "SiniestroRegistrado" | "ProveedorAsignado".
+class EventoSiniestros(Record):
+    # Campos del sobre declarados AQUÍ (pulsar.schema no hereda de la base).
+    id = String()
+    time = Long()
+    spec_version = String()
+    type = String()  # "SiniestroRegistrado" | "ProveedorAsignado"
     data = DatosSiniestro()
 ```
 
