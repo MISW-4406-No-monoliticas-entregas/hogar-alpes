@@ -24,7 +24,7 @@ TOPICO_COMANDOS = os.getenv("TOPICO_COMANDOS", f"{NS}/comandos.reglas")
 TOPICO_EVENTOS = os.getenv("TOPICO_EVENTOS", f"{NS}/eventos.reglas")
 TOPICO_EVENTOS_SINIESTROS = os.getenv("TOPICO_EVENTOS_SINIESTROS", f"{NS}/eventos.siniestros")
 
-SUSCRIPCION = os.getenv("PULSAR_SUSCRIPCION", "reglas")
+SUSCRIPCION = os.getenv("PULSAR_SUSCRIPCION", "sub-reglas")
 CONSUMIR_COMANDOS = os.getenv("CONSUMIR_COMANDOS", "true").lower() == "true"
 ESCUCHAR_EVENTOS_SINIESTROS = os.getenv("ESCUCHAR_EVENTOS_SINIESTROS", "true").lower() == "true"
 CARGAR_SEMILLA = os.getenv("CARGAR_SEMILLA", "true").lower() == "true"
