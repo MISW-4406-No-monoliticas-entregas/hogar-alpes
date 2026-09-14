@@ -1,4 +1,4 @@
-"""Comando AsignarProveedor y su handler."""
+"""Comando MarcarValidado y su handler."""
 import uuid
 from dataclasses import dataclass
 
@@ -9,14 +9,13 @@ from modulos.siniestros.aplicacion.servicios import nueva_uow, repositorio_en
 
 
 @dataclass
-class AsignarProveedor(Comando):
+class MarcarValidado(Comando):
     id_siniestro: str
-    proveedor_id: str
     id_mensaje: str | None = None  # id del mensaje del broker; None si viene por HTTP
 
 
-class AsignarProveedorHandler(ComandoHandler):
-    def handle(self, comando: AsignarProveedor) -> str | None:
+class MarcarValidadoHandler(ComandoHandler):
+    def handle(self, comando: MarcarValidado) -> str | None:
         with nueva_uow() as uow:
             if comando.id_mensaje:
                 try:
@@ -28,7 +27,7 @@ class AsignarProveedorHandler(ComandoHandler):
             if siniestro is None:
                 raise SiniestroNoExiste(comando.id_siniestro)
 
-            siniestro.asignar_proveedor(comando.proveedor_id)
+            siniestro.marcar_validado()
 
             repo.actualizar(siniestro)
             uow.registrar_agregado(siniestro)
@@ -36,6 +35,6 @@ class AsignarProveedorHandler(ComandoHandler):
         return str(siniestro.id)
 
 
-@ejecutar_comando.register(AsignarProveedor)
-def _(comando: AsignarProveedor):
-    return AsignarProveedorHandler().handle(comando)
+@ejecutar_comando.register(MarcarValidado)
+def _(comando: MarcarValidado):
+    return MarcarValidadoHandler().handle(comando)

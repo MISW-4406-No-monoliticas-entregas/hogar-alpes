@@ -1,4 +1,4 @@
-"""Comando AsignarProveedor y su handler."""
+"""Comando RechazarSiniestro y su handler."""
 import uuid
 from dataclasses import dataclass
 
@@ -9,14 +9,14 @@ from modulos.siniestros.aplicacion.servicios import nueva_uow, repositorio_en
 
 
 @dataclass
-class AsignarProveedor(Comando):
+class RechazarSiniestro(Comando):
     id_siniestro: str
-    proveedor_id: str
+    motivo: str = "no_especificado"
     id_mensaje: str | None = None  # id del mensaje del broker; None si viene por HTTP
 
 
-class AsignarProveedorHandler(ComandoHandler):
-    def handle(self, comando: AsignarProveedor) -> str | None:
+class RechazarSiniestroHandler(ComandoHandler):
+    def handle(self, comando: RechazarSiniestro) -> str | None:
         with nueva_uow() as uow:
             if comando.id_mensaje:
                 try:
@@ -28,7 +28,7 @@ class AsignarProveedorHandler(ComandoHandler):
             if siniestro is None:
                 raise SiniestroNoExiste(comando.id_siniestro)
 
-            siniestro.asignar_proveedor(comando.proveedor_id)
+            siniestro.rechazar(comando.motivo)
 
             repo.actualizar(siniestro)
             uow.registrar_agregado(siniestro)
@@ -36,6 +36,6 @@ class AsignarProveedorHandler(ComandoHandler):
         return str(siniestro.id)
 
 
-@ejecutar_comando.register(AsignarProveedor)
-def _(comando: AsignarProveedor):
-    return AsignarProveedorHandler().handle(comando)
+@ejecutar_comando.register(RechazarSiniestro)
+def _(comando: RechazarSiniestro):
+    return RechazarSiniestroHandler().handle(comando)

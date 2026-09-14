@@ -1,4 +1,12 @@
-"""Blueprint de la API HTTP."""
+"""Blueprint de la API HTTP.
+
+La ENTRADA DE PRODUCCIÓN de los comandos es el tópico comandos.siniestros
+(ver modulos/siniestros/infraestructura/consumidores.py). Los POST de comandos
+de este blueprint quedan como UTILIDADES DE PRUEBA: permiten ejercitar el flujo
+sin publicar en Pulsar (demos y Postman). Las consultas (GET) sí son la
+interfaz real de lectura y leen SOLO de la proyección estado_siniestro, nunca
+del event store.
+"""
 import dataclasses
 
 from flask import Blueprint, request, jsonify
@@ -11,6 +19,13 @@ from modulos.siniestros.aplicacion.comandos.registrar_siniestro import (
 )
 from modulos.siniestros.aplicacion.comandos.asignar_proveedor import (
     AsignarProveedor,
+)
+from modulos.siniestros.aplicacion.comandos.marcar_validado import MarcarValidado
+from modulos.siniestros.aplicacion.comandos.rechazar_siniestro import (
+    RechazarSiniestro,
+)
+from modulos.seguimiento.aplicacion.comandos.reconstruir_proyeccion import (
+    ReconstruirProyeccion,
 )
 from modulos.seguimiento.aplicacion.queries.obtener_estado_siniestro import (
     ObtenerEstadoSiniestro,
@@ -27,6 +42,10 @@ def _requerir(cuerpo: dict, *campos):
     if faltantes:
         raise APIError(f"Faltan campos: {', '.join(faltantes)}", 400)
 
+
+# --------------------------------------------------------------------------
+# Comandos por HTTP — utilidades de prueba (la entrada real es el tópico).
+# --------------------------------------------------------------------------
 
 @bp.post("/siniestros")
 def registrar_siniestro():
@@ -54,6 +73,41 @@ def asignar_proveedor(id_siniestro):
     )
     return jsonify({"id": id_siniestro, "estado": "ASIGNADO"}), 200
 
+
+@bp.post("/siniestros/<id_siniestro>/validar")
+def marcar_validado(id_siniestro):
+    ejecutar_comando(MarcarValidado(id_siniestro=id_siniestro))
+    return jsonify({"id": id_siniestro, "estado": "VALIDADO"}), 200
+
+
+@bp.post("/siniestros/<id_siniestro>/rechazar")
+def rechazar_siniestro(id_siniestro):
+    cuerpo = request.get_json(force=True, silent=True) or {}
+    ejecutar_comando(
+        RechazarSiniestro(
+            id_siniestro=id_siniestro,
+            motivo=cuerpo.get("motivo", "no_especificado"),
+        )
+    )
+    return jsonify({"id": id_siniestro, "estado": "RECHAZADO"}), 200
+
+
+# --------------------------------------------------------------------------
+# Utilidad admin: reconstruir la proyección desde el event store.
+# --------------------------------------------------------------------------
+
+@bp.post("/admin/proyecciones/estado-siniestro/reconstruir")
+def reconstruir_proyeccion():
+    cuerpo = request.get_json(force=True, silent=True) or {}
+    resultado = ejecutar_comando(
+        ReconstruirProyeccion(id_siniestro=cuerpo.get("id_siniestro"))
+    )
+    return jsonify(resultado), 200
+
+
+# --------------------------------------------------------------------------
+# Consultas: leen SOLO de la proyección.
+# --------------------------------------------------------------------------
 
 @bp.get("/siniestros/<id_siniestro>")
 def obtener_siniestro(id_siniestro):

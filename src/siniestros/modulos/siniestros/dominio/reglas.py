@@ -44,3 +44,29 @@ class ElSiniestroDebeEstarRegistradoParaAsignar(ReglaNegocio):
 
     def es_valido(self) -> bool:
         return self.estado == EstadoSiniestro.REGISTRADO
+
+
+@dataclass
+class ElSiniestroDebeEstarAsignadoParaValidar(ReglaNegocio):
+    estado: EstadoSiniestro | None = None
+
+    def __init__(self, estado,
+                 mensaje="Un siniestro solo puede validarse si está en estado ASIGNADO"):
+        super().__init__(mensaje)
+        self.estado = estado
+
+    def es_valido(self) -> bool:
+        return self.estado == EstadoSiniestro.ASIGNADO
+
+
+@dataclass
+class ElSiniestroNoDebeEstarCerradoParaRechazar(ReglaNegocio):
+    estado: EstadoSiniestro | None = None
+
+    def __init__(self, estado,
+                 mensaje="Un siniestro VALIDADO o RECHAZADO ya no puede rechazarse"):
+        super().__init__(mensaje)
+        self.estado = estado
+
+    def es_valido(self) -> bool:
+        return self.estado in (EstadoSiniestro.REGISTRADO, EstadoSiniestro.ASIGNADO)

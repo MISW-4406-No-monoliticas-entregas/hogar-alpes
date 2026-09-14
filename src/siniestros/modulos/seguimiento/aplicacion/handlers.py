@@ -26,7 +26,23 @@ def _al_asignar_proveedor(evento, **kwargs):
     )
 
 
+def _al_validar_siniestro(evento, **kwargs):
+    _repositorio.registrar_o_actualizar(
+        id_siniestro=str(evento.id_siniestro),
+        estado=evento.estado,
+    )
+
+
+def _al_rechazar_siniestro(evento, **kwargs):
+    _repositorio.registrar_o_actualizar(
+        id_siniestro=str(evento.id_siniestro),
+        estado=evento.estado,
+    )
+
+
 def registrar_handlers():
     """Suscribe los handlers a los eventos por nombre."""
     suscribirse_a_evento("SiniestroRegistrado", _al_registrar_siniestro)
     suscribirse_a_evento("ProveedorAsignado", _al_asignar_proveedor)
+    suscribirse_a_evento("SiniestroValidado", _al_validar_siniestro)
+    suscribirse_a_evento("SiniestroRechazado", _al_rechazar_siniestro)

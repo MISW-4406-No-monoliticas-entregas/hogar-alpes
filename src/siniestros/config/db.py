@@ -34,5 +34,6 @@ def crear_tablas():
     """Crea las tablas si no existen."""
     from modulos.siniestros.infraestructura import dto as _dto_siniestros
     from modulos.seguimiento.infraestructura import dto as _dto_seguimiento
+    from seedwork.infraestructura import idempotencia as _idempotencia
 
     Base.metadata.create_all(bind=get_engine())
