@@ -151,27 +151,33 @@ services:
   #     - "8001:5000"
 
   # ---------------------------------------------------------------------------
-  # S10 - Reglas de Partner (compañero C). feat/s10-reglas
+  # S10 - Reglas de Partner. feat/s10-reglas
   # ---------------------------------------------------------------------------
-  # reglas:
-  #   build: ./src/reglas
-  #   depends_on:
-  #     postgres-reglas:
-  #       condition: service_healthy
-  #     pulsar-init:
-  #       condition: service_completed_successfully
-  #   environment:
-  #     DB_HOST: postgres-reglas
-  #     DB_PORT: "5432"
-  #     DB_USER: reglas
-  #     DB_PASSWORD: reglas
-  #     DB_NAME: reglas
-  #     PULSAR_URL: pulsar://pulsar:6650
-  #     TOPICO_COMANDOS: persistent://hogar-alpes/siniestros-b2b2c/comandos.reglas
-  #     TOPICO_EVENTOS: persistent://hogar-alpes/siniestros-b2b2c/eventos.reglas
-  #     PORT: "5000"
-  #   ports:
-  #     - "8002:5000"
+  reglas:
+    build: ./src/reglas
+    depends_on:
+      postgres-reglas:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres-reglas
+      DB_PORT: "5432"
+      DB_USER: reglas
+      DB_PASSWORD: reglas
+      DB_NAME: reglas
+      PULSAR_URL: pulsar://pulsar:6650
+      TOPICO_COMANDOS: persistent://hogar-alpes/siniestros-b2b2c/comandos.reglas
+      TOPICO_EVENTOS: persistent://hogar-alpes/siniestros-b2b2c/eventos.reglas
+      # Suscripcion de solo lectura a lo que publica S2: en la E4 solo se registra
+      # en log, que es lo que demuestra que los servicios se oyen entre si.
+      TOPICO_EVENTOS_SINIESTROS: persistent://hogar-alpes/siniestros-b2b2c/eventos.siniestros
+      CONSUMIR_COMANDOS: "true"
+      ESCUCHAR_EVENTOS_SINIESTROS: "true"
+      CARGAR_SEMILLA: "true"
+      PORT: "5000"
+    ports:
+      - "8002:5000"
 
   # ---------------------------------------------------------------------------
   # S7 - Matching de Proveedores (compañero D). feat/s7-matching
