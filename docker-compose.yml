@@ -128,27 +128,27 @@ services:
       - "8000:5000"
 
   # ---------------------------------------------------------------------------
-  # S9 - Integraciones Partners (Luis). Se habilita en el Paso 4.
+  # S9 - Integraciones Partners (Luis). ACL de entrada; solo HTTP externo.
   # ---------------------------------------------------------------------------
-  # integraciones:
-  #   build: ./src/integraciones
-  #   depends_on:
-  #     postgres-integraciones:
-  #       condition: service_healthy
-  #     pulsar-init:
-  #       condition: service_completed_successfully
-  #   environment:
-  #     DB_HOST: postgres-integraciones
-  #     DB_PORT: "5432"
-  #     DB_USER: integraciones
-  #     DB_PASSWORD: integraciones
-  #     DB_NAME: integraciones
-  #     PULSAR_URL: pulsar://pulsar:6650
-  #     TOPICO_COMANDOS_SINIESTROS: persistent://hogar-alpes/siniestros-b2b2c/comandos.siniestros
-  #     TOPICO_EVENTOS: persistent://hogar-alpes/siniestros-b2b2c/eventos.partners
-  #     PORT: "5000"
-  #   ports:
-  #     - "8001:5000"
+  integraciones:
+    build: ./src/integraciones
+    depends_on:
+      postgres-integraciones:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres-integraciones
+      DB_PORT: "5432"
+      DB_USER: integraciones
+      DB_PASSWORD: integraciones
+      DB_NAME: integraciones
+      PULSAR_URL: pulsar://pulsar:6650
+      TOPICO_COMANDOS_SINIESTROS: persistent://hogar-alpes/siniestros-b2b2c/comandos.siniestros
+      TOPICO_EVENTOS: persistent://hogar-alpes/siniestros-b2b2c/eventos.partners
+      PORT: "5000"
+    ports:
+      - "8001:5000"
 
   # ---------------------------------------------------------------------------
   # S10 - Reglas de Partner (compañero C). feat/s10-reglas
