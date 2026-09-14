@@ -1,0 +1,65 @@
+{
+  "info": {
+    "name": "Hogar de los Alpes - E4",
+    "description": "Peticiones de la POC E4. S9 Integraciones (8001) es la entrada externa de partners; S2 Siniestros (8000) expone la proyeccion.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "s9", "value": "http://localhost:8001" },
+    { "key": "s2", "value": "http://localhost:8000" }
+  ],
+  "item": [
+    {
+      "name": "S9 - Sincronizar (Seguros Alpes)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{s9}}/partners/seguros-alpes/siniestros", "host": ["{{s9}}"], "path": ["partners", "seguros-alpes", "siniestros"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"numeroReclamo\": \"SA-2026-001\",\n  \"poliza\": \"POL-9\",\n  \"montoEstimado\": 500000,\n  \"moneda\": \"COP\",\n  \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n}"
+        }
+      }
+    },
+    {
+      "name": "S9 - Sincronizar (Banco Andes, formato distinto)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{s9}}/partners/banco-andes/siniestros", "host": ["{{s9}}"], "path": ["partners", "banco-andes", "siniestros"] },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"ref\": \"BA-778\",\n  \"policy_number\": \"POL-12\",\n  \"amount\": {\"value\": 1200000, \"currency\": \"COP\"},\n  \"address\": \"Calle 1 # 2-3, Bogota, CO\"\n}"
+        }
+      }
+    },
+    {
+      "name": "S9 - Obtener sincronizacion",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{s9}}/sincronizaciones/:id", "host": ["{{s9}}"], "path": ["sincronizaciones", ":id"], "variable": [{ "key": "id", "value": "" }] }
+      }
+    },
+    {
+      "name": "S9 - Listar sincronizaciones por partner",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{s9}}/partners/seguros-alpes/sincronizaciones", "host": ["{{s9}}"], "path": ["partners", "seguros-alpes", "sincronizaciones"] }
+      }
+    },
+    {
+      "name": "S2 - Proyeccion por partner (verificar consumo)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{s2}}/partners/seguros-alpes/siniestros", "host": ["{{s2}}"], "path": ["partners", "seguros-alpes", "siniestros"] }
+      }
+    },
+    {
+      "name": "S2 - Obtener siniestro (proyeccion)",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{s2}}/siniestros/:id", "host": ["{{s2}}"], "path": ["siniestros", ":id"], "variable": [{ "key": "id", "value": "" }] }
+      }
+    }
+  ]
+}

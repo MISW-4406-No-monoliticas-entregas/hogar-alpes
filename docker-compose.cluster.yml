@@ -1,0 +1,235 @@
+services:
+
+  zookeeper:
+    image: apachepulsar/pulsar:3.3.1
+    restart: on-failure
+    environment:
+      metadataStoreUrl: zk:zookeeper:2181
+      PULSAR_MEM: "-Xms256m -Xmx256m -XX:MaxDirectMemorySize=128m"
+    command: >
+      bash -c "bin/apply-config-from-env.py conf/zookeeper.conf &&
+               bin/generate-zookeeper-config.sh conf/zookeeper.conf &&
+               exec bin/pulsar zookeeper"
+    healthcheck:
+      test: ["CMD", "bin/pulsar-zookeeper-ruok.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  pulsar-cluster-init:
+    image: apachepulsar/pulsar:3.3.1
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    command: >
+      bash -c "bin/pulsar initialize-cluster-metadata
+                 --cluster cluster-hogar
+                 --zookeeper zookeeper:2181
+                 --configuration-store zookeeper:2181
+                 --web-service-url http://broker1:8080
+                 --broker-service-url pulsar://broker1:6650
+               || echo 'metadata ya inicializada'"
+    restart: "no"
+
+  bookie1: &bookie
+    image: apachepulsar/pulsar:3.3.1
+    restart: on-failure
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      pulsar-cluster-init:
+        condition: service_completed_successfully
+    environment:
+      clusterName: cluster-hogar
+      zkServers: zookeeper:2181
+      metadataServiceUri: metadata-store:zk:zookeeper:2181
+      advertisedAddress: bookie1
+      BOOKIE_MEM: "-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m"
+    command: >
+      bash -c "bin/apply-config-from-env.py conf/bookkeeper.conf &&
+               exec bin/pulsar bookie"
+
+  bookie2:
+    <<: *bookie
+    environment:
+      clusterName: cluster-hogar
+      zkServers: zookeeper:2181
+      metadataServiceUri: metadata-store:zk:zookeeper:2181
+      advertisedAddress: bookie2
+      BOOKIE_MEM: "-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m"
+
+  broker1: &broker
+    image: apachepulsar/pulsar:3.3.1
+    restart: on-failure
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      bookie1:
+        condition: service_started
+      bookie2:
+        condition: service_started
+    environment:
+      clusterName: cluster-hogar
+      zookeeperServers: zookeeper:2181
+      metadataStoreUrl: zk:zookeeper:2181
+      configurationMetadataStoreUrl: zk:zookeeper:2181
+      managedLedgerDefaultEnsembleSize: "2"
+      managedLedgerDefaultWriteQuorum: "2"
+      managedLedgerDefaultAckQuorum: "2"
+      advertisedAddress: broker1
+      brokerDeleteInactiveTopicsEnabled: "false"
+      PULSAR_MEM: "-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m"
+    ports:
+      - "6650:6650"
+      - "8080:8080"
+    command: >
+      bash -c "bin/apply-config-from-env.py conf/broker.conf &&
+               exec bin/pulsar broker"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/admin/v2/clusters || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  broker2:
+    <<: *broker
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+      bookie1:
+        condition: service_started
+      bookie2:
+        condition: service_started
+    environment:
+      clusterName: cluster-hogar
+      zookeeperServers: zookeeper:2181
+      metadataStoreUrl: zk:zookeeper:2181
+      configurationMetadataStoreUrl: zk:zookeeper:2181
+      managedLedgerDefaultEnsembleSize: "2"
+      managedLedgerDefaultWriteQuorum: "2"
+      managedLedgerDefaultAckQuorum: "2"
+      advertisedAddress: broker2
+      brokerDeleteInactiveTopicsEnabled: "false"
+      PULSAR_MEM: "-Xms512m -Xmx512m -XX:MaxDirectMemorySize=256m"
+    ports:
+      - "6651:6650"
+      - "8081:8080"
+
+  pulsar-init:
+    image: apachepulsar/pulsar:3.3.1
+    depends_on:
+      broker1:
+        condition: service_healthy
+    environment:
+      PULSAR_ADMIN_URL: http://broker1:8080
+      PULSAR_CLUSTER: cluster-hogar
+    volumes:
+      - ./infra/pulsar:/infra/pulsar:ro
+    command: ["bash", "/infra/pulsar/crear_topicos.sh"]
+    restart: "no"
+
+  postgres-siniestros:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_SINIESTROS_USER:-siniestros}
+      POSTGRES_PASSWORD: ${DB_SINIESTROS_PASSWORD:-siniestros}
+      POSTGRES_DB: siniestros
+    volumes:
+      - pgdata-siniestros:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_SINIESTROS_USER:-siniestros}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-integraciones:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_INTEGRACIONES_USER:-integraciones}
+      POSTGRES_PASSWORD: ${DB_INTEGRACIONES_PASSWORD:-integraciones}
+      POSTGRES_DB: integraciones
+    volumes:
+      - pgdata-integraciones:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_INTEGRACIONES_USER:-integraciones}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-reglas:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_REGLAS_USER:-reglas}
+      POSTGRES_PASSWORD: ${DB_REGLAS_PASSWORD:-reglas}
+      POSTGRES_DB: reglas
+    volumes:
+      - pgdata-reglas:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_REGLAS_USER:-reglas}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-matching:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_MATCHING_USER:-matching}
+      POSTGRES_PASSWORD: ${DB_MATCHING_PASSWORD:-matching}
+      POSTGRES_DB: matching
+    volumes:
+      - pgdata-matching:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_MATCHING_USER:-matching}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  siniestros:
+    build: ./src/siniestros
+    restart: on-failure
+    depends_on:
+      postgres-siniestros:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres-siniestros
+      DB_PORT: "5432"
+      DB_USER: ${DB_SINIESTROS_USER:-siniestros}
+      DB_PASSWORD: ${DB_SINIESTROS_PASSWORD:-siniestros}
+      DB_NAME: siniestros
+      PULSAR_URL: pulsar://broker1:6650,broker2:6650
+      PULSAR_ADMIN_URL: http://broker1:8080
+      TOPICO_EVENTOS: persistent://hogar-alpes/siniestros-b2b2c/eventos.siniestros
+      TOPICO_COMANDOS: persistent://hogar-alpes/siniestros-b2b2c/comandos.siniestros
+      CONSUMIR_COMANDOS: "true"
+      PORT: "5000"
+    ports:
+      - "8000:5000"
+
+  integraciones:
+    build: ./src/integraciones
+    restart: on-failure
+    depends_on:
+      postgres-integraciones:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres-integraciones
+      DB_PORT: "5432"
+      DB_USER: ${DB_INTEGRACIONES_USER:-integraciones}
+      DB_PASSWORD: ${DB_INTEGRACIONES_PASSWORD:-integraciones}
+      DB_NAME: integraciones
+      PULSAR_URL: pulsar://broker1:6650,broker2:6650
+      TOPICO_COMANDOS_SINIESTROS: persistent://hogar-alpes/siniestros-b2b2c/comandos.siniestros
+      TOPICO_EVENTOS: persistent://hogar-alpes/siniestros-b2b2c/eventos.partners
+      PORT: "5000"
+    ports:
+      - "8001:5000"
+
+volumes:
+  pgdata-siniestros:
+  pgdata-integraciones:
+  pgdata-reglas:
+  pgdata-matching:
