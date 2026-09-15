@@ -83,6 +83,7 @@ publica S2; no se importa código entre servicios.
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/proveedores?zona=<zona>&servicio=<servicio>` | Proveedores habilitados por zona y servicio |
+| `GET` | `/asignaciones/<id_siniestro>` | Estado de la asignación de un siniestro (proveedor reservado, o `SIN_PROVEEDOR`) |
 | `GET` | `/salud` | Verificación de disponibilidad |
 
 ## Pruebas
