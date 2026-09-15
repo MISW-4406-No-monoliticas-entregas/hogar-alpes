@@ -1,219 +1,273 @@
-# Trabajos Siniestros
+# Hogar de los Alpes — POC de arquitectura basada en eventos (Entrega 4)
 
-Microservicio de la plataforma **Hogar de los Alpes** encargado de recibir los
-siniestros que envían los partners (aseguradoras, bancos, comercios) y gestionar
-su ciclo de vida. Forma parte de la línea de negocio B2B2C, que concentra el 70 %
-del volumen de la plataforma.
+Prueba de concepto de la migración del monolito **Hogar de los Alpes** a una
+arquitectura de microservicios dirigida por eventos. Implementa los **cuatro
+servicios** que participan en la transacción larga *"atender un siniestro
+B2B2C"* (el 70 % del volumen del negocio), que **solo se comunican por comandos y
+eventos en Apache Pulsar** — cero HTTP/gRPC entre servicios; HTTP solo para las
+consultas `GET` de cada servicio y para la entrada externa del partner.
 
-El servicio está diseñado con **Domain-Driven Design**, **arquitectura hexagonal**
-y **comunicación basada en eventos**, priorizando escalabilidad, modificabilidad
-y disponibilidad.
+> **Alcance.** En esta entrega los servicios se *oyen* por los tópicos, pero
+> todavía no completan la transacción: la saga que los orquesta y el BFF son de
+> la Entrega 5. Aquí se deja lista la **infraestructura** que hace demostrables
+> los tres escenarios de calidad.
 
-## Arquitectura
+## Atributos de calidad y escenarios probados
 
-El servicio se organiza en dos módulos que no se conocen entre sí y se comunican
-únicamente a través de eventos de dominio:
+Se valida **un escenario por cada atributo de calidad** priorizado. La ejecución
+medida es de la Entrega 5; la Entrega 4 deja la infraestructura y el README que
+los describe.
 
-- **`siniestros`** — lado de escritura. Contiene el agregado `Siniestro` y toda
-  la lógica de negocio. Recibe comandos, aplica las invariantes del dominio,
-  persiste el estado y emite eventos de dominio.
-- **`seguimiento`** — lado de lectura (CQRS). Mantiene una proyección
-  desnormalizada del estado de cada siniestro, optimizada para consulta, que se
-  actualiza reaccionando a los eventos que emite `siniestros`.
-  
-Cada evento de dominio se despacha de dos maneras complementarias:
+| # | Atributo | Escenario | Qué del código lo hace posible | Medida objetivo |
+|---|---|---|---|---|
+| 1 | **Escalabilidad** | Pico de 4× de siniestros de partners sostenido 48 h por un evento climático | Tópicos particionados (×4), consumidores `Key_Shared` que escalan agregando réplicas **sin tocar código**, event store *append-only* en S2 | p99 de aceptación ≤ 2 s; 0 mensajes perdidos; el throughput crece al agregar réplicas |
+| 6 | **Modificabilidad** | Se publica la v2 de un esquema de evento y ningún consumidor se redespliega | `SiniestroRegistrado` v2 con un campo nuevo **con valor por defecto**; política `BACKWARD` en el schema registry de Pulsar | 0 consumidores redesplegados; el registry acepta v2; los consumidores v1 leen mensajes v2 |
+| 7 | **Disponibilidad** | Se cae una réplica de S2 Siniestros con carga activa y no se pierde ningún siniestro | `Key_Shared` + `ack` **después** del commit de BD + idempotencia por `id` de mensaje: Pulsar reentrega lo no confirmado | 0 siniestros perdidos; la proyección sigue actualizándose; recuperación < 30 s |
 
-1. **En proceso**, mediante un mediador de señales, para actualizar la proyección
-   del módulo `seguimiento`.
-2. **Hacia el broker**, traducido a un evento de integración con esquema Avro y
-   publicado en el tópico `eventos.trabajos`, para que lo consuma el resto de los
-   microservicios de la plataforma.
+El escenario 3 (consulta CQRS bajo carga) queda como **bonus**: la proyección ya
+existe y cuesta poco medirla, pero no es uno de los tres oficiales.
 
-El comando `RegistrarSiniestro` puede llegar tanto por HTTP como por el tópico
-`comandos.siniestros`, porque en producción la carga real entra por el broker.
+## La transacción larga y los 4 servicios
 
-## Diagramas
+```mermaid
+flowchart TD
+    X1["Sistemas de Partner<br/>(externo)"] -->|HTTP POST<br/>/partners/&lt;id&gt;/siniestros| S9
 
-Arquitectura de alto nivel:
+    subgraph POC["hogar-alpes / siniestros-b2b2c"]
+        S9["S9 Integraciones<br/>(ACL · CRUD)"]
+        S2["S2 Siniestros<br/>(Event Sourcing + CQRS)"]
+        S10["S10 Reglas<br/>(CRUD)"]
+        S7["S7 Matching<br/>(CRUD)"]
 
-![Arquitectura de alto nivel](docs/diagramas/01-arquitectura.svg)
+        S9 -->|cmd RegistrarSiniestro| CS[["comandos.siniestros"]]
+        S9 -->|SiniestroSincronizado| EP[["eventos.partners"]]
+        CS --> S2
+        S2 -->|SiniestroRegistrado, ...| ES[["eventos.siniestros"]]
 
-Flujo de una petición (comando → evento → proyección → consulta):
+        CR[["comandos.reglas"]] --> S10
+        S10 -->|Aprobado/Rechazado| ER[["eventos.reglas"]]
+        CM[["comandos.matching"]] --> S7
+        S7 -->|ProveedorAsignado/Sin| EM[["eventos.matching"]]
 
-![Flujo de una petición](docs/diagramas/02-flujo.svg)
-
-Capas (arquitectura hexagonal):
-
-![Capas hexagonales](docs/diagramas/03-hexagonal.svg)
-
-## Modelo de dominio
-
-- **Agregado raíz:** `Siniestro`, con entidades hijas `Evidencia` y `Actividad`.
-- **Objetos valor:** `Direccion`, `Monto`, `EstadoSiniestro`, `Poliza`, `PartnerId`.
-- **Comandos:** `RegistrarSiniestro`, `AsignarProveedor`.
-- **Eventos de dominio:** `SiniestroRegistrado`, `ProveedorAsignado`.
-- **Reglas de negocio** (invariantes del agregado):
-  - la póliza es obligatoria,
-  - el monto estimado debe ser positivo,
-  - un siniestro solo puede asignarse a un proveedor si está en estado registrado.
-
-## Decisiones de diseño
-
-- **Arquitectura hexagonal.** El dominio no depende de infraestructura ni del
-  framework web; las dependencias apuntan siempre hacia el dominio. La API y los
-  consumidores del broker son adaptadores de entrada; el repositorio y el
-  despachador de eventos son adaptadores de salida. El ensamblado de adaptadores
-  concretos se hace en la capa de aplicación y al arrancar la app.
-
-- **CQRS y separación comando/consulta.** La escritura (`siniestros`) y la lectura
-  (`seguimiento`) tienen modelos, tablas y rutas de código distintas. Esto permite
-  escalar la ingesta y la consulta de forma independiente, algo clave dado el
-  volumen del negocio (25 millones de peticiones diarias de partners, con picos
-  de hasta 4x durante eventos climáticos).
-
-- **Comunicación por eventos, sin acoplamiento entre módulos.** `seguimiento` se
-  suscribe a los eventos de dominio por su nombre, a través del mediador de
-  señales del `seedwork`, y nunca importa clases del módulo `siniestros`. Ambos
-  módulos solo comparten el nombre y la forma del evento como contrato.
-
-- **La Unidad de Trabajo es la única que publica eventos.** El agregado acumula
-  sus eventos de dominio pero no los emite; la Unidad de Trabajo los despacha
-  después de confirmar la transacción, de modo que nada se publica si la
-  persistencia falla.
-
-- **Fábrica del agregado.** Encapsula el ensamblado del `Siniestro` y aplica las
-  invariantes en la construcción, garantizando que ningún siniestro exista en un
-  estado inválido.
-
-- **Esquemas Avro versionados (`schema/v1/`).** Los eventos de integración usan un
-  esquema versionado. La evolución retrocompatible (añadir campos opcionales en un
-  `schema/v2`) permite cambiar el contrato sin romper a los consumidores.
-
-- **`seedwork` con las clases base.** Concentra las abstracciones de DDD
-  (entidad, agregación raíz, objeto valor, evento de dominio, regla de negocio,
-  fábrica, repositorio, Unidad de Trabajo, mediadores) compartidas por los módulos.
-
-## Stack tecnológico
-
-- **Python 3.12 + Flask** para el adaptador HTTP.
-- **SQLAlchemy sobre PostgreSQL** como persistencia. Dos tablas: `siniestros`
-  (escritura) y `estado_siniestro` (lectura).
-- **Apache Pulsar** como event broker, con esquemas **Avro** para los mensajes.
-  En desarrollo corre en modo `standalone`; en producción sería un clúster
-  multi-zona.
-- **PyDispatcher** para el mediador de eventos de dominio en proceso.
-
-## Estructura del proyecto
-
-```
-src/siniestros/
-  api/                 Adaptador HTTP (Flask): blueprints y create_app
-  config/              Conexion a PostgreSQL y settings por variables de entorno
-  seedwork/            Clases base compartidas (DDD)
-    dominio/           Entidad, AgregacionRaiz, ObjetoValor, EventoDominio,
-                       ReglaNegocio, Fabrica, Repositorio, excepciones, mixins
-    aplicacion/        Comando/Query y sus mediadores, mediador de eventos de
-                       dominio, DTO, Mapeador, ServicioAplicacion
-    infraestructura/   Unidad de Trabajo, UoW SQLAlchemy, bases Pulsar/Avro
-    presentacion/      Manejo de errores de la API
-  modulos/
-    siniestros/        Escritura: dominio, aplicacion (comandos), infraestructura
-    seguimiento/       Lectura (CQRS): proyeccion, queries, handlers
-  main.py              Arranca Flask y el consumidor de comandos.siniestros
+        ES -.solo log en E4.-> S10
+        ES -.solo log en E4.-> S7
+    end
 ```
 
-## Configuración
+En la E4, `comandos.reglas` y `comandos.matching` se publican **a mano** (Postman
+o script); en la E5 la saga (S4) emite la secuencia
+`RegistrarSiniestro → ValidarSiniestro → AsignarProveedor` con sus compensaciones.
 
-Toda la configuración se toma de variables de entorno; el repositorio no contiene
-credenciales. Los valores por defecto son de desarrollo y coinciden con los del
-`docker-compose.yml`.
+| Servicio | Rol | Consume | Publica | BD | Patrón de datos | Dueño |
+|---|---|---|---|---|---|---|
+| **S9 Integraciones Partners** | ACL de entrada: traduce el siniestro del partner al comando canónico; idempotencia por `partner_id + id_externo` | HTTP del partner (externo) | `comandos.siniestros`, `eventos.partners` | `integraciones` (1 tabla) | CRUD | A · Luis |
+| **S2 Trabajos Siniestros** | Dueño del agregado `Siniestro` y su ciclo de vida | `comandos.siniestros` | `eventos.siniestros` | `siniestros` (event store + proyección) | **Event Sourcing + CQRS** | B |
+| **S10 Reglas de Partner** | Evalúa reglas del partner (monto, cobertura, zona) | `comandos.reglas`, `eventos.siniestros` (log) | `eventos.reglas` | `reglas` (2 tablas) | CRUD | C |
+| **S7 Matching de Proveedores** | Busca y reserva un proveedor habilitado | `comandos.matching`, `eventos.siniestros` (log) | `eventos.matching` | `matching` (2 tablas) | CRUD | D |
 
-| Variable | Default | Descripción |
-|---|---|---|
-| `DATABASE_URL` | (vacío) | URL completa de la base; si se define, tiene prioridad |
-| `DB_HOST` / `DB_PORT` | `localhost` / `5432` | PostgreSQL |
-| `DB_USER` / `DB_PASSWORD` / `DB_NAME` | `siniestros` | Credenciales de desarrollo |
-| `PULSAR_URL` | `pulsar://localhost:6650` | Broker |
-| `TOPICO_EVENTOS` | `eventos.trabajos` | Eventos de integración (salida) |
-| `TOPICO_COMANDOS` | `comandos.siniestros` | Comandos por broker (entrada) |
-| `CONSUMIR_COMANDOS` | `true` | Arranca el consumidor de comandos |
+Cada servicio tiene **su propio PostgreSQL**; ninguno conoce la base de otro.
 
-## Cómo ejecutar
+## Contrato de tópicos y esquemas
+
+Todos viven bajo `persistent://hogar-alpes/siniestros-b2b2c/<nombre>` y llegan a
+cada servicio **por variable de entorno**, nunca escritos a mano en el código.
+Los crea el script [`infra/pulsar/crear_topicos.sh`](infra/pulsar/crear_topicos.sh)
+(que corre el contenedor efímero `pulsar-init`).
+
+| Tópico | Particiones | Mensajes | Publica | Consume |
+|---|---|---|---|---|
+| `comandos.siniestros` | **4** | RegistrarSiniestro, MarcarValidado, AsignarProveedor, RechazarSiniestro | S9 (saga en E5) | S2 |
+| `eventos.siniestros` | **4** | SiniestroRegistrado, SiniestroValidado, ProveedorAsignado, SiniestroRechazado | S2 | S10, S7 (log en E4) |
+| `comandos.reglas` | 1 | ValidarSiniestro | saga (E5); en E4 a mano | S10 |
+| `eventos.reglas` | 1 | SiniestroAprobadoPorReglas, SiniestroRechazadoPorReglas | S10 | saga (E5) |
+| `comandos.matching` | 1 | AsignarProveedor, LiberarProveedor | saga (E5); en E4 a mano | S7 |
+| `eventos.matching` | 1 | ProveedorAsignado, SinProveedorDisponible | S7 | saga (E5) |
+| `eventos.partners` | 1 | SiniestroSincronizado | S9 | — |
+
+`comandos.siniestros` y `eventos.siniestros` van **particionados a 4** porque son
+los que reciben el pico 4× (PS-01); la llave de partición es el `id` del siniestro
+(orden por siniestro, paralelismo entre siniestros). El resto son de bajo volumen.
+
+**El sobre de todo mensaje** vive en `seedwork/infraestructura/schema/v1/mensajes.py`
+y no se toca: `id`, `time`, `spec_version`, `type` y `data`. El campo `type`
+permite que varios tipos de evento viajen por el mismo tópico y que el consumidor
+sepa a qué handler despacharlos.
+
+## Decisiones de arquitectura (para la sustentación)
+
+### Tipo de eventos: con carga de estado (*state-carrying*)
+
+Los eventos llevan **los datos del agregado** (id, partner, póliza, dirección,
+monto, estado, versión…), no solo el identificador. Razón: como **no se permiten
+llamados síncronos** entre servicios, un consumidor que recibe solo un `id` no
+tiene cómo "ir a preguntar" por el resto; y así cada servicio mantiene su propio
+modelo de lectura y absorbe la carga localmente (AC-1 escalabilidad, AC-3
+disponibilidad). El tradeoff (TO-01) es acoplamiento al esquema, que se mitiga con
+el versionamiento. Los **comandos** también llevan el payload completo (son la
+intención de un actor sobre un agregado).
+
+> Distinción para la sustentación: los eventos de dominio *internos* de S2 (entre
+> `siniestros` y `seguimiento`) son eventos de dominio **en memoria**; los que
+> salen por Pulsar son eventos de **integración con carga de estado**.
+
+### Esquemas: Avro + schema registry de Pulsar + versionamiento de stream
+
+- **Avro** porque el cliente Python de Pulsar trae `AvroSchema` nativo y el
+  **schema registry viene integrado en el broker** (sin componente externo); la
+  evolución por **valores por defecto** es el mecanismo estándar y hace posible el
+  escenario 6; y es lo que usa el curso. Protobuf se descartó (su ventaja es gRPC
+  y multi-lenguaje, y aquí no hay gRPC y todo es Python); JSON plano, por no tener
+  contrato ni evolución controlada.
+- **Política `BACKWARD`** en el namespace: un consumidor con el esquema nuevo lee
+  mensajes viejos. Con `set-is-allow-auto-update-schema` el registry acepta la v2
+  aditiva; un productor con un esquema **incompatible** es rechazado por el broker
+  (demo en vivo del escenario 6).
+- **Versionamiento de stream:** cambios **aditivos** (campo nuevo con default) →
+  nueva versión del esquema en el **mismo tópico** (`v1` → `v1.1`). Cambios
+  **incompatibles** (quitar/renombrar/cambiar tipo) → **no** sobre el mismo
+  stream: se crea `eventos.siniestros.v2`, se publica en ambos durante la
+  transición (*dual publish*) y se migran los consumidores a su ritmo. Código en
+  `infraestructura/schema/v1/` (y `v2/`) por servicio.
+- **Dueño del esquema:** cada servicio es dueño de los esquemas de los tópicos que
+  **publica** y de los comandos que **consume**. El otro lado **copia** el esquema
+  (Published Language); nunca se importa código entre servicios (PS-05).
+
+### Almacenamiento: topología descentralizada + híbrido CRUD / Event Sourcing
+
+- **Descentralizada (database per service).** Cuatro instancias PostgreSQL, una
+  por servicio, con credenciales propias. Los modelos de lectura que un servicio
+  necesita (p. ej. `proveedores_habilitados` en S7) se construyen **a partir de
+  eventos**, no leyendo la BD ajena. Es la traducción directa de los bounded
+  contexts (PS-08). La BD compartida fue el anti-patrón del AS-IS (equipos
+  bloqueados, despliegues de 3–4 h). Beneficia AC-2 (cada equipo cambia su esquema
+  sin coordinar), AC-1 (cada BD escala según su carga) y AC-3 (una BD caída no
+  tumba a las demás). Tradeoff aceptado: consistencia eventual y duplicación de
+  datos (TO-01).
+- **Event Sourcing en S2**, CRUD en S9/S10/S7. El siniestro tiene consecuencias
+  contractuales (SLA, disputas) → necesita **auditoría completa**; reconstruir el
+  agregado desde sus eventos la da gratis y hace natural la proyección
+  `estado_siniestro` (CQRS); el event store es *append-only* → escala la escritura
+  bajo el pico (escenarios 1 y 7). Los otros tres son configuración/registros sin
+  historia: ES ahí sería complejidad sin beneficio. Tener ambos patrones en el POC
+  demuestra que **cada equipo elige el suyo** (autonomía = AC-2).
+- Que S2 tenga dos tablas (event store + proyección) en su propia base **no**
+  rompe la descentralización: es un solo dueño con separación escritura/lectura.
+
+### Seedwork copiado, no compartido
+
+Cada servicio lleva **su copia** del `seedwork`. Es deliberado (PS-05): una
+librería compartida que evoluciona obliga a redesplegar los cuatro servicios — el
+Shared Kernel disfrazado del AS-IS. En un monorepo la copia cuesta poco y cada
+servicio queda desplegable solo.
+
+### Patrón obligatorio de todo consumidor
+
+Resuelto en `src/_plantilla/` y replicado en los 4 servicios: suscripción
+**`Key_Shared`** con nombre por servicio (`sub-siniestros`, `sub-reglas`…), llave
+de partición = `id` del siniestro, **`ack` después** de confirmar la transacción
+de BD (*at-least-once*), `negative_acknowledge` en error e **idempotencia por `id`
+de mensaje**. Ese trío (Key_Shared + ack tardío + idempotencia) es la respuesta
+técnica al escenario 7.
+
+## Cómo levantar el POC en local
+
+Requiere Docker y Docker Compose. Un solo comando levanta Pulsar standalone, las
+4 bases y los servicios; los tópicos los crea `pulsar-init` sin pasos manuales:
 
 ```bash
+git clone https://github.com/MISW-4406-No-monoliticas-entregas/hogar-alpes.git
+cd hogar-alpes
 docker compose up --build
 ```
 
-Levanta tres contenedores: PostgreSQL, Apache Pulsar (standalone) y el servicio.
-El servicio está listo cuando `GET /salud` responde `{"estado":"ok"}`.
-
-### Flujo de ejemplo
-
-Registrar un siniestro (comando por HTTP):
-
-```bash
-curl -X POST http://localhost:8000/siniestros \
-  -H "Content-Type: application/json" \
-  -d '{"partner_id":"aseguradora-1","poliza":"POL-123","monto":500000,
-       "moneda":"COP","calle":"Cra 7 # 1-2","ciudad":"Bogota"}'
-```
-
-Consultar el estado (lee la proyección de `seguimiento`):
-
-```bash
-curl http://localhost:8000/siniestros/<id>
-curl http://localhost:8000/partners/aseguradora-1/siniestros
-```
-
-Asignar un proveedor:
-
-```bash
-curl -X POST http://localhost:8000/siniestros/<id>/proveedor \
-  -H "Content-Type: application/json" -d '{"proveedor_id":"prov-9"}'
-```
-
-Observar el evento de integración publicado en el broker:
-
-```bash
-docker compose exec pulsar bin/pulsar-client consume eventos.trabajos \
-  -s lector-demo -n 0
-```
-
-## API
-
-| Método | Ruta | Descripción |
+| Servicio | URL local | Puerto Postgres |
 |---|---|---|
-| `POST` | `/siniestros` | Registra un siniestro |
-| `POST` | `/siniestros/<id>/proveedor` | Asigna un proveedor a un siniestro |
-| `GET`  | `/siniestros/<id>` | Estado de un siniestro (proyección) |
-| `GET`  | `/partners/<id>/siniestros` | Siniestros de un partner (proyección) |
-| `GET`  | `/salud` | Verificación de disponibilidad |
+| S9 Integraciones | http://localhost:8001 | 5434 |
+| S2 Siniestros | http://localhost:8000 | 5433 |
+| S10 Reglas | http://localhost:8002 | 5435 |
+| S7 Matching | http://localhost:8003 | 5436 |
+| Pulsar (binario / admin) | `pulsar://localhost:6650` / http://localhost:8080 | — |
 
-## Pruebas
+> Los servicios de los compañeros (S10, S7) quedan **comentados** en
+> `docker-compose.yml` hasta que sus carpetas existan, para que `docker compose
+> up` siempre funcione. Se descomentan al integrar.
+
+### Flujo de aceptación de punta a punta
 
 ```bash
-pip install -r requirements.txt
-pytest
+# 1. El partner envía un siniestro en SU formato -> S9 lo traduce y publica el comando
+#    (Seguros Alpes usa numeroReclamo + montoEstimado + dirección estructurada)
+curl -X POST http://localhost:8001/partners/seguros-alpes/siniestros \
+  -H "Content-Type: application/json" \
+  -d '{"numeroReclamo":"SA-1001","poliza":"POL-123","montoEstimado":500000,
+       "moneda":"COP","direccion":{"calle":"Cra 7 # 1-2","ciudad":"Bogota","pais":"CO"}}'
+# La respuesta 202 trae el id_sincronizacion. Otro partner con OTRO formato:
+#   curl -X POST http://localhost:8001/partners/banco-andes/siniestros -H "Content-Type: application/json" \
+#     -d '{"ref":"BA-778","policy_number":"POL-12","amount":{"value":1200000,"currency":"COP"},"address":"Calle 1 # 2-3, Bogota, CO"}'
+
+# 2. El comando viaja por comandos.siniestros -> S2 lo procesa -> event store + proyección
+curl http://localhost:8000/siniestros/<id_siniestro>
+
+# 3. Observar el evento de integración publicado por S2
+docker compose exec pulsar bin/pulsar-client consume \
+  persistent://hogar-alpes/siniestros-b2b2c/eventos.siniestros -s demo -n 0
 ```
 
-La suite cubre las reglas de negocio del agregado de forma aislada y el flujo de
-eventos entre módulos (comando → evento de dominio → proyección → consulta).
+## Cluster de Pulsar
 
-## Escenarios de calidad
+Para probar el sistema sobre un cluster real de Pulsar (en vez de standalone)
+está `docker-compose.cluster.yml`: ZooKeeper + 2 bookies + 2 brokers (con
+replicación `ensemble/write/ack = 2`) + las 4 bases + los servicios. Dos brokers
+y dos bookies permiten en la E5 tumbar un broker (escenario 9) y escalar réplicas
+de S2. Las credenciales se pasan por variables de entorno (ver `.env.example`).
 
-Sobre este servicio se ejecutan los escenarios de los atributos de calidad
-priorizados:
+```bash
+docker compose -f docker-compose.cluster.yml up --build
+```
 
-- **Ingesta bajo carga (escalabilidad).** Ráfaga de comandos `RegistrarSiniestro`
-  por `comandos.siniestros`. El consumidor usa suscripción `Shared`, de modo que
-  varias réplicas del servicio reparten la carga.
-- **Consulta bajo carga (escalabilidad).** Ráfaga de consultas sobre la proyección
-  `estado_siniestro`. Al estar separada de la escritura, puede escalarse con
-  réplicas de lectura sin afectar la ingesta.
-- **Pérdida de una réplica (disponibilidad).** Se da de baja una réplica del
-  servicio o del broker. Pulsar reentrega los mensajes no confirmados a otra
-  réplica y la reconexión a PostgreSQL se recupera automáticamente, de modo que
-  el sistema sigue atendiendo.
+## Estructura del repositorio
 
-En producción, Pulsar correría como clúster multi-zona y el servicio se
-desplegaría con varias réplicas detrás de un balanceador.
+```
+hogar-alpes/
+├── README.md                     este archivo (arquitectura, decisiones, escenarios)
+├── docker-compose.yml            local: pulsar standalone + 4 postgres + servicios
+├── docker-compose.cluster.yml    cluster: zk + 2 bookies + 2 brokers + init + 4 postgres + servicios
+├── infra/
+│   ├── pulsar/crear_topicos.sh   tenant, namespace, tópicos particionados, BACKWARD, retención
+│   └── postman/                  colección de demo (POST a S9, GETs a S2/S7/S10)
+├── docs/                         notas de arquitectura
+└── src/
+    ├── siniestros/               S2 — Event Sourcing + CQRS
+    ├── integraciones/            S9 — CRUD, ACL por partner
+    ├── reglas/                   S10 — CRUD (compañero C)
+    ├── matching/                 S7 — CRUD (compañero D)
+    └── _plantilla/               servicio de referencia que C y D copian
+```
+
+Cada `src/<servicio>/` repite la estructura de los tutoriales 3/5/7 (`api/`,
+`config/`, `seedwork/` propio, `modulos/<modulo>/{dominio,aplicacion,infraestructura}`,
+`Dockerfile`, `tests/`). Ver el README de cada servicio para el detalle.
+
+## Reglas que no se negocian
+
+- Ningún servicio importa código de otro ni le hace HTTP. Cada servicio conoce
+  solo la URL de Pulsar y su propia BD. (Se verifica con `grep` antes de entregar.)
+- HTTP **solo** para consultas `GET` dentro de cada servicio y para la entrada
+  externa del partner en S9.
+- El dominio no importa Flask, SQLAlchemy ni pulsar. Puertos en dominio y
+  aplicación; adaptadores en infraestructura y api.
+- Todo en español; eventos en participio pasado, comandos en imperativo.
+- Sin credenciales en el repo; sin `.env` reales; sin sobre-ingeniería
+  (autenticación, snapshots, sagas y BFF son de la Entrega 5).
+
+## Actividades por miembro
+
+| Miembro | Servicio / entregable | Rama |
+|---|---|---|
+| **A · Luis** | Infraestructura (monorepo, `docker-compose`, topología Pulsar, plantilla), **S9 Integraciones**, README de decisiones | `feat/monorepo-infra`, `feat/s9-integraciones` |
+| **B** | **S2 Trabajos Siniestros**: consumidor de comandos, Event Sourcing, proyección/reconstrucción, esquemas v1/v2 | `feat/s2-event-sourcing` |
+| **C** | **S10 Reglas de Partner** (CRUD sobre la plantilla) | `feat/s10-reglas` |
+| **D** | **S7 Matching de Proveedores** (CRUD), colección Postman unificada, documento de actividades | `feat/s7-matching` |
+
+El documento detallado de contribuciones (respaldado por los pull requests) lo
+consolida D. Las contribuciones son visibles en los commits y PRs de cada rama.
