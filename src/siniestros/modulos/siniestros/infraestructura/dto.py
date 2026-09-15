@@ -1,7 +1,28 @@
-"""Modelo SQLAlchemy de la tabla siniestros (escritura)."""
-from sqlalchemy import Column, String, Float, DateTime, JSON
+"""Modelos SQLAlchemy del módulo siniestros (escritura).
+
+- `eventos_siniestro` es el EVENT STORE: la fuente de verdad del agregado.
+- `siniestros` era la tabla CRUD de la E3; se conserva solo para no romper
+  datos existentes, pero el repositorio activo ya no la escribe.
+"""
+from sqlalchemy import Column, String, Float, DateTime, JSON, Integer, UniqueConstraint
 
 from config.db import Base
+
+
+class EventoSiniestroDTO(Base):
+    __tablename__ = "eventos_siniestro"
+    # (siniestro_id, version) único => control de concurrencia optimista: dos
+    # escritores que partieron de la misma versión chocan aquí y uno falla.
+    __table_args__ = (
+        UniqueConstraint("siniestro_id", "version", name="uq_eventos_siniestro_version"),
+    )
+
+    id = Column(String(36), primary_key=True)  # id del evento de dominio
+    siniestro_id = Column(String(36), nullable=False, index=True)
+    tipo = Column(String(100), nullable=False)
+    version = Column(Integer, nullable=False)
+    fecha = Column(DateTime, nullable=False)
+    datos = Column(JSON, nullable=False)
 
 
 class SiniestroDTO(Base):

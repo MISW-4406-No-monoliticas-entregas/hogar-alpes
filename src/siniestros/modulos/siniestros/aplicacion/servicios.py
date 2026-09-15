@@ -2,7 +2,7 @@
 from seedwork.infraestructura.uow_sqlalchemy import UnidadDeTrabajoSQLAlchemy
 from config.db import SessionLocal
 from modulos.siniestros.infraestructura.repositorios import (
-    RepositorioSiniestrosSQLAlchemy,
+    RepositorioSiniestrosEventStore,
 )
 
 
@@ -10,5 +10,6 @@ def nueva_uow() -> UnidadDeTrabajoSQLAlchemy:
     return UnidadDeTrabajoSQLAlchemy(SessionLocal)
 
 
-def repositorio_en(uow: UnidadDeTrabajoSQLAlchemy) -> RepositorioSiniestrosSQLAlchemy:
-    return RepositorioSiniestrosSQLAlchemy(uow.session)
+def repositorio_en(uow: UnidadDeTrabajoSQLAlchemy) -> RepositorioSiniestrosEventStore:
+    # Persistencia por event sourcing: mismo puerto del dominio, otro adaptador.
+    return RepositorioSiniestrosEventStore(uow.session)
