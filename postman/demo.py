@@ -24,6 +24,13 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
+# La consola de Windows no siempre usa UTF-8 por defecto y desfigura tildes/ñ.
+for _flujo in (sys.stdout, sys.stderr):
+    try:
+        _flujo.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):
+        pass
+
 S9 = "http://localhost:8001"
 S2 = "http://localhost:8000"
 S10 = "http://localhost:8002"
@@ -151,8 +158,26 @@ def verificar_asignacion(id_siniestro: str) -> Optional[dict]:
     fila = _esperar(f"S7 -> asignación de {id_siniestro}", intento)
     if fila:
         proveedor = fila.get("nombre_proveedor") or "(sin proveedor)"
-        print(f"  Estado: {fila['estado']} — proveedor: {proveedor}")
+        print(f"  Estado: {fila['estado']} - proveedor: {proveedor}")
     return fila
+
+
+def liberar_proveedor_si_quedo_asignado(id_siniestro: str, asignacion: Optional[dict]):
+    """Libera el proveedor al terminar el caso, para que el demo sea repetible.
+
+    La semilla de S7 solo trae un proveedor disponible por servicio/zona; sin
+    esto, correr el script una segunda vez ya no encontraría cobertura.
+    """
+    if not asignacion or asignacion.get("estado") != "ASIGNADA":
+        return
+    proveedor_id = asignacion.get("proveedor_id")
+    _titulo(f"S7 <- comandos.matching: LiberarProveedor (limpieza, deja el proveedor libre de nuevo)")
+    cmd = [
+        "docker", "compose", "exec", "-T", "matching", "python",
+        "scripts/publicar_prueba.py", "liberar", id_siniestro, proveedor_id,
+    ]
+    print("  $", " ".join(cmd))
+    subprocess.run(cmd, check=True)
 
 
 # --------------------------------------------------------------------------
@@ -181,6 +206,8 @@ def correr_caso(nombre: str, poliza: str, monto: float, servicio: str, zona: str
     asignacion = verificar_asignacion(id_siniestro)
     resultado["matching"] = asignacion["estado"] if asignacion else "SIN RESPUESTA"
     resultado["proveedor"] = asignacion.get("nombre_proveedor") if asignacion else None
+
+    liberar_proveedor_si_quedo_asignado(id_siniestro, asignacion)
 
     resultado["estado"] = "OK"
     return resultado

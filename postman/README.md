@@ -59,6 +59,12 @@ Corre dos casos completos y termina con un resumen:
    `SinProveedorDisponible`. Así se ve que la falta de cobertura es un
    problema de **S7**, no de la validación de S10.
 
+El script es **repetible**: la semilla de S7 solo trae un proveedor
+disponible de plomería en bogotá-norte, así que al final del caso 1, si quedó
+`ASIGNADA`, el script publica `LiberarProveedor` para dejarlo libre de nuevo
+(igual que haría la saga de la E5 al compensar). Sin este paso, correr
+`demo.py` una segunda vez ya no encontraría cobertura.
+
 Salida esperada (resumida):
 
 ```
