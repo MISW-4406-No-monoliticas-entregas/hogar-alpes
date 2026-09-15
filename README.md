@@ -93,7 +93,7 @@ y no se toca: `id`, `time`, `spec_version`, `type` y `data`. El campo `type`
 permite que varios tipos de evento viajen por el mismo tópico y que el consumidor
 sepa a qué handler despacharlos.
 
-## Decisiones de arquitectura (para la sustentación)
+## Decisiones de arquitectura
 
 ### Tipo de eventos: con carga de estado (*state-carrying*)
 
@@ -106,9 +106,9 @@ disponibilidad). El tradeoff (TO-01) es acoplamiento al esquema, que se mitiga c
 el versionamiento. Los **comandos** también llevan el payload completo (son la
 intención de un actor sobre un agregado).
 
-> Distinción para la sustentación: los eventos de dominio *internos* de S2 (entre
-> `siniestros` y `seguimiento`) son eventos de dominio **en memoria**; los que
-> salen por Pulsar son eventos de **integración con carga de estado**.
+> Distinción: los eventos de dominio *internos* de S2 (entre `siniestros` y
+> `seguimiento`) son eventos de dominio **en memoria**; los que salen por Pulsar
+> son eventos de **integración con carga de estado**.
 
 ### Esquemas: Avro + schema registry de Pulsar + versionamiento de stream
 

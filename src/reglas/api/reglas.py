@@ -1,6 +1,6 @@
 """Blueprint HTTP del servicio de Reglas de Partner.
 
-Los GET son las consultas sincronas que la rubrica permite. El POST es una
+Los GET son las consultas sincronas permitidas. El POST es una
 utilidad de prueba para disparar el comando sin publicar en el topico, el camino
 real de produccion es comandos.reglas.
 """
