@@ -213,6 +213,76 @@ docker compose exec pulsar bin/pulsar-client consume \
   persistent://hogar-alpes/siniestros-b2b2c/eventos.siniestros -s demo -n 0
 ```
 
+## Probar S7 Matching manualmente
+
+En esta entrega `comandos.matching` se publica a mano (la saga que lo hace es
+de la Entrega 5). El servicio siembra `proveedores_habilitados` al arrancar
+con proveedores en varias zonas/servicios, algunos disponibles y otros no
+(ver `src/matching/modulos/matching/infraestructura/semilla.py`), para poder
+demostrar los dos desenlaces.
+
+```bash
+docker compose up --build -d matching
+```
+
+### 1. Caso con cobertura → `ProveedorAsignado`
+
+`plomeria` + `norte` tiene un proveedor sembrado disponible:
+
+```bash
+docker compose exec matching python scripts/publicar_prueba.py \
+  asignar siniestro-demo-1 plomeria norte
+```
+
+### 2. Caso sin cobertura → `SinProveedorDisponible`
+
+`vidrieria` + `norte` solo tiene un proveedor sembrado **no disponible**:
+
+```bash
+docker compose exec matching python scripts/publicar_prueba.py \
+  asignar siniestro-demo-2 vidrieria norte
+```
+
+### 3. Verificar el resultado
+
+```bash
+# La asignación quedó ASIGNADA (o SIN_PROVEEDOR) y con fechas.
+docker compose exec postgres-matching psql -U matching -d matching \
+  -c "select id_siniestro, servicio, zona, proveedor_id, estado from asignaciones;"
+
+# El proveedor usado quedó disponible=false.
+docker compose exec postgres-matching psql -U matching -d matching \
+  -c "select nombre, servicio, zona, disponible from proveedores_habilitados;"
+
+# El evento de integración publicado por S7 (verás ProveedorAsignado y
+# SinProveedorDisponible, uno por cada comando de arriba).
+docker compose exec pulsar bin/pulsar-client consume \
+  persistent://hogar-alpes/siniestros-b2b2c/eventos.matching -s demo -n 0
+```
+
+### 4. Compensación (a mano, sin saga todavía)
+
+```bash
+# Usa el proveedor_id que quedó ocupado en el paso 1 (columna `id` de
+# proveedores_habilitados para esa fila, o `proveedor_id` en asignaciones).
+docker compose exec matching python scripts/publicar_prueba.py \
+  liberar siniestro-demo-1 <proveedor_id>
+
+# El proveedor vuelve a disponible=true; no se publica evento (fuera del
+# contrato de esta entrega).
+docker compose exec postgres-matching psql -U matching -d matching \
+  -c "select nombre, disponible from proveedores_habilitados where id='<proveedor_id>';"
+```
+
+### 5. GET de consulta y suscripción de solo-log
+
+```bash
+curl "http://localhost:8003/proveedores?zona=norte&servicio=plomeria"
+
+# S7 solo loguea lo que le llega de S2, sin lógica de negocio todavía.
+docker compose logs -f matching | grep "eventos.siniestros"
+```
+
 ## Cluster de Pulsar
 
 Para probar el sistema sobre un cluster real de Pulsar (en vez de standalone)
