@@ -49,11 +49,12 @@ def suscribirse_a_comandos(url_broker: str = PULSAR_URL):
 
 def _registrar_en_log(sobre):
     logger.info(
-        "[eventos.siniestros] type=%s id_siniestro=%s partner=%s estado=%s",
+        "[eventos.siniestros] type=%s id_siniestro=%s partner=%s estado=%s motivo=%s",
         sobre.type,
         sobre.data.id_siniestro,
         sobre.data.partner_id,
         sobre.data.estado,
+        sobre.data.motivo,
     )
 
 
@@ -66,5 +67,7 @@ def suscribirse_a_eventos_de_siniestros(url_broker: str = PULSAR_URL):
         manejadores={
             "SiniestroRegistrado": _registrar_en_log,
             "ProveedorAsignado": _registrar_en_log,
+            "SiniestroValidado": _registrar_en_log,
+            "SiniestroRechazado": _registrar_en_log,
         },
     ).iniciar()

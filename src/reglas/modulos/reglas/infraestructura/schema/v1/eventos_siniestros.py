@@ -15,6 +15,7 @@ class DatosSiniestro(Record):
     moneda = String(required=False, default="")
     proveedor_id = String(required=False, default="")
     estado = String(required=False, default="")
+    motivo = String(required=False, default="")
 
 
 class EventoSiniestros(Record):
