@@ -27,12 +27,17 @@ Los checkpoints 1 y 2 se corrieron contra `docker compose up` desde cero
 (2026-09-14): levanta sin pasos manuales, el flujo comando → evento →
 proyección → consulta funciona por el tópico, y matar el contenedor con un
 comando pendiente no pierde el siniestro (Pulsar lo reentrega al reiniciar).
+También se corrió la integración real S9 → S2 (ver sección final): se encontró
+y corrigió un bucle de reintentos infinito por desalineación de esquema, y se
+reverificó con dos partners distintos (Seguros Alpes y Banco Andes) llegando
+limpio a `eventos_siniestro` y `estado_siniestro`.
 
 ### Limitaciones conocidas / pendientes
 
-- **Coordinación con S9 (ver sección al final)**: el esquema del comando cambió
-  (ahora el sobre viaja de verdad); S9 debe actualizar su copia. Mientras tanto
-  hay un puente de compatibilidad, pero es temporal.
+- Ninguna de las 5 tareas de la entrega quedó pendiente. El hallazgo de
+  integración con S9 (bucle de reintentos por esquema incompatible) se
+  encontró y corrigió — ver sección final para el detalle y para lo que falta
+  que el dueño de S9 revise.
 - La tabla `siniestros` (CRUD de la E3) sigue existiendo y `RepositorioSiniestrosSQLAlchemy`
   se conserva como referencia, pero ya nada los escribe. Se pueden borrar cuando
   el equipo lo decida.
@@ -200,26 +205,43 @@ Nota: `pulsar-client==3.5.0` no tiene wheel para Python 3.13; con Python
 local ≥3.13 instalar `pulsar-client>=3.6` y `fastavro>=1.10` solo para los
 tests (la API usada es idéntica).
 
-## ⚠️ Coordinación pendiente con S9 (esquema del comando)
+## Coordinación con S9 (esquema del comando) — RESUELTO 2026-09-14
 
 **S2 es el dueño del esquema de `comandos.siniestros`.** En la E3 el sobre se
 declaraba por herencia (`ComandoIntegracion(Mensaje)`), y por el bug documentado
 en `docs/notas/nota-B-esquema-backward.md` (`pulsar.schema.Record` **no hereda**
 campos de la clase base), `id`, `time`, `spec_version` y `type` **no viajaban**.
-S9 copió ese esquema "tal cual" (así lo dice su propio código), o sea que hoy
-S9 publica mensajes **sin sobre efectivo**: sin `type` no se puede despachar y
-sin `id` no se puede deduplicar.
+S9 había copiado ese esquema "tal cual" (su propio docstring lo decía), y al
+probar la integración end-to-end (`docker compose up` con ambos servicios) el
+choque fue más grave que perder el sobre: el `data` de S9 era un record Avro
+distinto (`RegistrarSiniestroPayload`, 7 campos) del que S2 ya tenía registrado
+(`DatosComandoSiniestros`, 10 campos). El registry aceptó el mensaje pero el
+consumidor de S2 nunca lograba deserializarlo (`fastavro.SchemaResolutionError`)
+y entraba en **reintento infinito** vía `negative_acknowledge` — bloqueando esa
+partición Key_Shared indefinidamente. Se reprodujo con
+`POST /partners/seguros-alpes/siniestros` en S9.
 
-Esta entrega corrige el esquema del lado del dueño
-(`modulos/siniestros/infraestructura/schema/v1/comandos.py`): sobre declarado en
-la clase concreta + `data` con todos los campos opcionales (compatible BACKWARD
-con lo publicado por S9, porque los campos nuevos son anulables).
+**Corrección aplicada** en ambos lados del contrato (el dueño, S2, no cambió su
+esquema; se corrigió la copia de S9 para que coincida exactamente):
+- `modulos/siniestros/infraestructura/schema/v1/comandos.py` (S2, dueño): sin
+  cambios respecto a la versión ya descrita arriba.
+- `src/integraciones/modulos/sincronizaciones/infraestructura/schema/v1/comandos.py`
+  (S9): se reemplazó `RegistrarSiniestroPayload`/`ComandoRegistrarSiniestro` por
+  una copia fiel de `DatosComandoSiniestros`/`ComandoSiniestros` (mismo nombre de
+  record, mismos 10 campos). El despachador de S9 no cambió su lógica — ya
+  llenaba `id/time/spec_version/type` correctamente, solo el esquema Avro
+  declarado estaba desalineado.
 
-**Lo que S9 tiene que hacer**: actualizar su copia del esquema
-(`src/integraciones/.../schema/v1/comandos.py`) a esta forma exacta y llenar el
-sobre (ya llena `id/time/type` en su despachador; solo le falta que el esquema
-los declare). **Puente temporal**: mientras migra, los mensajes que lleguen con
-`type` nulo se asumen `RegistrarSiniestro` con un warning ruidoso en el log y se
-deduplican por el `message_id` del broker — funciona, pero no es el contrato.
-Quitar ese puente (`_al_mensaje_sin_type` en
-`modulos/siniestros/infraestructura/consumidores.py`) cuando S9 migre.
+**Verificado end-to-end** con `docker compose up -d --build` (ambos servicios):
+`POST /partners/seguros-alpes/siniestros` y `POST /partners/banco-andes/siniestros`
+en S9 (puerto 8001) llegaron limpios a `eventos_siniestro` y `estado_siniestro`
+en S2, sin errores ni reintentos en el log.
+
+El puente de compatibilidad (`_al_mensaje_sin_type` en
+`modulos/siniestros/infraestructura/consumidores.py`) se conserva como red de
+seguridad silenciosa ante un productor futuro mal configurado, pero ya no debería
+activarse con el esquema corregido.
+
+> Este cambio se aplicó directamente sobre `src/integraciones/` (carpeta de S9)
+> en esta rama. Queda pendiente que el dueño de ese servicio lo revise al
+> fusionar.

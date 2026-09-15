@@ -33,7 +33,7 @@ Agregar un partner = agregar una clase `Traductor` y registrarla en
 
 | Salida | Tópico | Esquema |
 |---|---|---|
-| Comando | `comandos.siniestros` | `ComandoRegistrarSiniestro` **copiado tal cual** de Siniestros (el dueño del esquema del comando es quien lo consume) |
+| Comando | `comandos.siniestros` | `ComandoSiniestros` **copiado tal cual** de Siniestros (el dueño del esquema del comando es quien lo consume; sobre único por tópico, `data` con todos los campos de todos los comandos del tópico) |
 | Evento | `eventos.partners` | `SiniestroSincronizado` (propio de S9) |
 
 ## Base de datos
