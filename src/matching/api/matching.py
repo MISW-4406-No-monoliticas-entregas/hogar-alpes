@@ -8,6 +8,9 @@ from seedwork.presentacion.api import APIError
 from modulos.matching.aplicacion.queries.listar_proveedores import (
     ListarProveedoresPorZonaYServicio,
 )
+from modulos.matching.aplicacion.queries.obtener_asignacion import (
+    ObtenerAsignacionPorSiniestro,
+)
 
 bp = Blueprint("matching", __name__)
 
@@ -23,3 +26,14 @@ def listar_proveedores():
         ListarProveedoresPorZonaYServicio(zona=zona, servicio=servicio)
     ).resultado
     return jsonify([dataclasses.asdict(p) for p in resultado]), 200
+
+
+@bp.get("/asignaciones/<id_siniestro>")
+def obtener_asignacion(id_siniestro):
+    # Consulta síncrona (permitida): estado de la asignación de un siniestro.
+    resultado = ejecutar_query(
+        ObtenerAsignacionPorSiniestro(id_siniestro=id_siniestro)
+    ).resultado
+    if resultado is None:
+        raise APIError("No hay asignación para ese siniestro", 404)
+    return jsonify(dataclasses.asdict(resultado)), 200

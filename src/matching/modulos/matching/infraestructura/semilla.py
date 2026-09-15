@@ -14,14 +14,18 @@ logger = logging.getLogger(__name__)
 
 _PROVEEDORES = [
     # (nombre, servicio, zona, disponible)
-    ("Plomería Los Alpes", "plomeria", "norte", True),
-    ("Plomería Express Bogotá", "plomeria", "norte", False),
-    ("Electricistas del Valle", "electricidad", "norte", True),
-    ("Vidrios Andinos", "vidrieria", "norte", False),
-    ("Cerrajería Central", "cerrajeria", "sur", True),
-    ("Plomería del Sur", "plomeria", "sur", False),
-    ("Electricistas Unidos", "electricidad", "occidente", False),
-    ("Gasfitería Oriente", "gasfiteria", "oriente", True),
+    # Zonas y servicios alineados con el catálogo de S10 (seguros-alpes cubre
+    # plomeria/electricidad/carpinteria en bogota-norte/bogota-centro/medellin)
+    # para poder demostrar el flujo completo aprobado-por-reglas +
+    # asignado-por-matching con los mismos valores de servicio/zona.
+    ("Plomería Los Alpes", "plomeria", "bogota-norte", True),
+    ("Plomería Express Bogotá", "plomeria", "bogota-norte", False),
+    ("Electricistas del Valle", "electricidad", "bogota-norte", True),
+    ("Carpintería Andina", "carpinteria", "bogota-norte", False),
+    ("Cerrajería Central", "plomeria", "bogota-centro", True),
+    ("Plomería del Sur", "plomeria", "medellin", False),
+    ("Electricistas Unidos", "electricidad", "cali", False),
+    ("Carpintería Pacífico", "carpinteria", "barranquilla", True),
 ]
 
 

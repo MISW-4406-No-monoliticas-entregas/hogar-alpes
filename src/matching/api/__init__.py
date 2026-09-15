@@ -15,6 +15,7 @@ def _importar_handlers_de_comandos_y_queries():
     from modulos.matching.aplicacion.comandos import asignar_proveedor  # noqa: F401
     from modulos.matching.aplicacion.comandos import liberar_proveedor  # noqa: F401
     from modulos.matching.aplicacion.queries import listar_proveedores  # noqa: F401
+    from modulos.matching.aplicacion.queries import obtener_asignacion  # noqa: F401
 
 
 def create_app() -> Flask:
