@@ -8,6 +8,8 @@ from seedwork.dominio.objetos_valor import ObjetoValor
 class EstadoSiniestro(str, Enum):
     REGISTRADO = "REGISTRADO"
     ASIGNADO = "ASIGNADO"
+    VALIDADO = "VALIDADO"
+    RECHAZADO = "RECHAZADO"
 
 
 @dataclass(frozen=True)

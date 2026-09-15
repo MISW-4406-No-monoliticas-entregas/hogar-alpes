@@ -182,25 +182,29 @@ services:
   # ---------------------------------------------------------------------------
   # S7 - Matching de Proveedores (compañero D). feat/s7-matching
   # ---------------------------------------------------------------------------
-  # matching:
-  #   build: ./src/matching
-  #   depends_on:
-  #     postgres-matching:
-  #       condition: service_healthy
-  #     pulsar-init:
-  #       condition: service_completed_successfully
-  #   environment:
-  #     DB_HOST: postgres-matching
-  #     DB_PORT: "5432"
-  #     DB_USER: matching
-  #     DB_PASSWORD: matching
-  #     DB_NAME: matching
-  #     PULSAR_URL: pulsar://pulsar:6650
-  #     TOPICO_COMANDOS: persistent://hogar-alpes/siniestros-b2b2c/comandos.matching
-  #     TOPICO_EVENTOS: persistent://hogar-alpes/siniestros-b2b2c/eventos.matching
-  #     PORT: "5000"
-  #   ports:
-  #     - "8003:5000"
+  matching:
+    build: ./src/matching
+    depends_on:
+      postgres-matching:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres-matching
+      DB_PORT: "5432"
+      DB_USER: matching
+      DB_PASSWORD: matching
+      DB_NAME: matching
+      PULSAR_URL: pulsar://pulsar:6650
+      TOPICO_COMANDOS: persistent://hogar-alpes/siniestros-b2b2c/comandos.matching
+      TOPICO_EVENTOS: persistent://hogar-alpes/siniestros-b2b2c/eventos.matching
+      # Tópico de otro servicio (S2): S7 solo se suscribe para registrar en log.
+      TOPICO_EVENTOS_SINIESTROS: persistent://hogar-alpes/siniestros-b2b2c/eventos.siniestros
+      CONSUMIR_COMANDOS: "true"
+      CONSUMIR_EVENTOS_SINIESTROS: "true"
+      PORT: "5000"
+    ports:
+      - "8003:5000"
 
 volumes:
   pgdata-siniestros:

@@ -17,21 +17,22 @@ def _importar_handlers_de_comandos_y_queries():
     """Importa los módulos que registran los handlers de comandos y queries."""
     from modulos.siniestros.aplicacion.comandos import registrar_siniestro
     from modulos.siniestros.aplicacion.comandos import asignar_proveedor
+    from modulos.siniestros.aplicacion.comandos import marcar_validado
+    from modulos.siniestros.aplicacion.comandos import rechazar_siniestro
+    from modulos.seguimiento.aplicacion.comandos import reconstruir_proyeccion
     from modulos.seguimiento.aplicacion.queries import obtener_estado_siniestro
     from modulos.seguimiento.aplicacion.queries import listar_siniestros_por_partner
 
 
 def create_app(iniciar_broker: bool = True) -> Flask:
+    # `iniciar_broker` se conserva por compatibilidad de firma; la topología del
+    # namespace la fija infra/pulsar/crear_topicos.sh (servicio pulsar-init),
+    # así que aquí ya no se configura nada contra el broker.
     logging.basicConfig(level=logging.INFO)
     app = Flask(__name__)
 
     from config.db import crear_tablas
     crear_tablas()
-
-    if iniciar_broker:
-        from seedwork.infraestructura.broker import configurar_namespace_multiesquema
-        from config.settings import PULSAR_ADMIN_URL
-        configurar_namespace_multiesquema(PULSAR_ADMIN_URL)
 
     _importar_handlers_de_comandos_y_queries()
     _registrar_suscripciones_de_eventos()

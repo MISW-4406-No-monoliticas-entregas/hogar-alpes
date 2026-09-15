@@ -10,8 +10,8 @@ from seedwork.infraestructura.utils import tiempo_actual_ms, generar_uuid
 from config.settings import PULSAR_URL, TOPICO_COMANDOS_SINIESTROS, TOPICO_EVENTOS
 from modulos.sincronizaciones.dominio.eventos import SiniestroSincronizado
 from modulos.sincronizaciones.infraestructura.schema.v1.comandos import (
-    ComandoRegistrarSiniestro,
-    RegistrarSiniestroPayload,
+    ComandoSiniestros,
+    DatosComandoSiniestros,
 )
 from modulos.sincronizaciones.infraestructura.schema.v1.eventos import (
     EventoSiniestroSincronizado,
@@ -27,12 +27,12 @@ class DespachadorComandos(Despachador):
         raise NotImplementedError
 
     def publicar_registrar_siniestro(self, evento: SiniestroSincronizado):
-        mensaje = ComandoRegistrarSiniestro(
+        mensaje = ComandoSiniestros(
             id=generar_uuid(),
             time=tiempo_actual_ms(),
             spec_version="v1",
             type="RegistrarSiniestro",
-            data=RegistrarSiniestroPayload(
+            data=DatosComandoSiniestros(
                 partner_id=evento.partner_id,
                 poliza=evento.poliza,
                 monto=evento.monto,
@@ -45,7 +45,7 @@ class DespachadorComandos(Despachador):
         # Key_Shared: mismo siniestro del partner => misma partición/consumidor.
         clave = f"{evento.partner_id}:{evento.id_externo}"
         self._publicar_mensaje(
-            mensaje, TOPICO_COMANDOS_SINIESTROS, ComandoRegistrarSiniestro,
+            mensaje, TOPICO_COMANDOS_SINIESTROS, ComandoSiniestros,
             clave_particion=clave,
         )
 
