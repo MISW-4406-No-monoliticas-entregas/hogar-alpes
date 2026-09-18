@@ -186,6 +186,7 @@ docker compose up --build
 | S2 Siniestros | http://localhost:8000 | 5433 |
 | S10 Reglas | http://localhost:8002 | 5435 |
 | S7 Matching | http://localhost:8003 | 5436 |
+| **BFF** (interfaz síncrona hacia afuera) | http://localhost:8004 | — (sin BD) |
 | Pulsar (binario / admin) | `pulsar://localhost:6650` / http://localhost:8080 | — |
 
 > Los servicios de los compañeros (S10, S7) quedan **comentados** en
@@ -283,6 +284,27 @@ curl "http://localhost:8003/proveedores?zona=norte&servicio=plomeria"
 docker compose logs -f matching | grep "eventos.siniestros"
 ```
 
+## BFF: probar el sistema por HTTP desde afuera
+
+El `docker compose up` también levanta el BFF en `http://localhost:8004`. Todo
+el flujo anterior se puede hacer contra él (es lo que usaría un sistema externo
+o un frontend), sin conocer los puertos de cada servicio:
+
+```bash
+# Registrar (el BFF reenvía a S9; S9 publica RegistrarSiniestro en comandos.siniestros)
+curl -X POST http://localhost:8004/siniestros -H "Content-Type: application/json" \
+  -d '{"partner_id":"seguros-alpes","siniestro":{"numeroReclamo":"SA-1001","poliza":"POL-123",
+       "montoEstimado":500000,"moneda":"COP","direccion":{"calle":"Cra 7 # 1-2","ciudad":"Bogota","pais":"CO"}}}'
+curl http://localhost:8004/partners/seguros-alpes/siniestros      # -> S2 (ubicar por póliza)
+curl http://localhost:8004/siniestros/<id_siniestro>              # -> S2 (detalle)
+curl http://localhost:8004/siniestros/<id_siniestro>/estado       # -> orquestador S4 (501 hasta integrarlo)
+curl http://localhost:8004/reglas/seguros-alpes                   # -> S10
+curl "http://localhost:8004/proveedores?zona=bogota-norte&servicio=plomeria"   # -> S7
+```
+
+Endpoints, contrato esperado del orquestador, manejo de errores y colección
+Postman (`{{bff_url}}`): [`src/bff/README.md`](src/bff/README.md).
+
 ## Cluster de Pulsar
 
 Para probar el sistema sobre un cluster real de Pulsar (en vez de standalone)
@@ -305,12 +327,14 @@ hogar-alpes/
 ├── infra/
 │   ├── pulsar/crear_topicos.sh   tenant, namespace, tópicos particionados, BACKWARD, retención
 │   └── postman/                  colección de demo (POST a S9, GETs a S2/S7/S10)
+├── postman/                      colección E2E (S9→S2→S10→S7) + demo.py; la del BFF está en src/bff/postman/
 ├── docs/                         notas de arquitectura
 └── src/
     ├── siniestros/               S2 — Event Sourcing + CQRS
     ├── integraciones/            S9 — CRUD, ACL por partner
     ├── reglas/                   S10 — CRUD (compañero C)
     ├── matching/                 S7 — CRUD (compañero D)
+    ├── bff/                      BFF — REST hacia afuera; único autorizado a hacer HTTP a S9/S2/S10/S7/S4
     └── _plantilla/               servicio de referencia que C y D copian
 ```
 
@@ -324,6 +348,12 @@ Cada `src/<servicio>/` repite la estructura de los tutoriales 3/5/7 (`api/`,
   solo la URL de Pulsar y su propia BD. (Se verifica con `grep` antes de entregar.)
 - HTTP **solo** para consultas `GET` dentro de cada servicio y para la entrada
   externa del partner en S9.
+- **Única excepción: el BFF** (`src/bff/`). Es la interfaz síncrona hacia
+  afuera y la única pieza autorizada a hacerle HTTP a los servicios: registra
+  **a través de S9** (no publica comandos), consulta S2/S10/S7 directo para el
+  dato propio de cada uno, y el estado de la transacción larga se lo pide al
+  **Saga Log del orquestador (S4)**, nunca lo arma combinando servicios. Ver
+  [`src/bff/README.md`](src/bff/README.md).
 - El dominio no importa Flask, SQLAlchemy ni pulsar. Puertos en dominio y
   aplicación; adaptadores en infraestructura y api.
 - Todo en español; eventos en participio pasado, comandos en imperativo.

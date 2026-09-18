@@ -1,0 +1,685 @@
+{
+  "info": {
+    "name": "Hogar de los Alpes - BFF",
+    "description": "Todos los endpoints del BFF (src/bff). El BFF es la interfaz sincrona hacia afuera: la unica pieza autorizada a hacerle HTTP a los demas servicios. Cada request de esta coleccion le pega SOLO al BFF ({{bff_url}}); a que servicio interno le pega el BFF en cada caso esta en la descripcion de cada carpeta y en src/bff/README.md. Cambia {{bff_url}} para apuntar a local (http://localhost:8004) o a GCP.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "bff_url",
+      "value": "http://localhost:8004"
+    },
+    {
+      "key": "partnerId",
+      "value": "seguros-alpes"
+    },
+    {
+      "key": "servicio",
+      "value": "plomeria"
+    },
+    {
+      "key": "zona",
+      "value": "bogota-norte"
+    },
+    {
+      "key": "monto",
+      "value": "500000"
+    },
+    {
+      "key": "poliza",
+      "value": ""
+    },
+    {
+      "key": "idSincronizacion",
+      "value": ""
+    },
+    {
+      "key": "idSiniestro",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Salud",
+      "description": "Diagnostico del BFF y de sus dependencias. /salud/dependencias le pega al /salud de cada servicio interno (solo infraestructura, no arma ningun estado de negocio).",
+      "item": [
+        {
+          "name": "Salud del BFF",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/salud",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "salud"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('servicio bff', () => pm.expect(pm.response.json().servicio).to.eql('bff'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Salud de las dependencias (S9, S2, S10, S7, S4)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/salud/dependencias",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "salud",
+                "dependencias"
+              ]
+            },
+            "description": "Cada dependencia queda en ok, caido o no_integrado (este ultimo es el orquestador S4 mientras ORQUESTADOR_URL este vacia)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "['S9 Integraciones','S2 Siniestros','S10 Reglas','S7 Matching'].forEach(s => {",
+                  "  pm.test(s + ' arriba', () => pm.expect(r[s].estado).to.eql('ok'));",
+                  "});",
+                  "console.log('S4 Orquestador:', r['S4 Orquestador'].estado, '(no_integrado hasta que se fusione su rama)');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Registrar siniestro (BFF -> S9)",
+      "description": "POST /siniestros del BFF reenvia el payload del partner a POST /partners/<partner_id>/siniestros de S9. S9 es el ACL de entrada: traduce al canonico y publica RegistrarSiniestro en comandos.siniestros; el BFF NO publica comandos ni le habla al orquestador para esto. Efecto: identico a un POST directo a S9.",
+      "item": [
+        {
+          "name": "Registrar siniestro (partner seguros-alpes)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{bff_url}}/siniestros",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "siniestros"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{partnerId}}\",\n  \"siniestro\": {\n    \"numeroReclamo\": \"SA-{{poliza}}\",\n    \"poliza\": \"{{poliza}}\",\n    \"montoEstimado\": {{monto}},\n    \"moneda\": \"COP\",\n    \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "El objeto `siniestro` va en el formato PROPIO del partner (aqui el de Seguros Alpes: numeroReclamo, poliza, montoEstimado, direccion estructurada). El pre-request genera una poliza unica por corrida para no chocar con la idempotencia de S9 (partner_id + numeroReclamo => 409)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('poliza', 'POL-BFF-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Aceptado por S9', () => pm.response.to.have.status(202));",
+                  "const json = pm.response.json();",
+                  "pm.test('estado PUBLICADA', () => pm.expect(json.estado).to.eql('PUBLICADA'));",
+                  "if (json.id_sincronizacion) { pm.collectionVariables.set('idSincronizacion', json.id_sincronizacion); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar siniestro (partner banco-andes, otro formato)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{bff_url}}/siniestros",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "siniestros"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"banco-andes\",\n  \"siniestro\": {\n    \"ref\": \"BA-{{$timestamp}}\",\n    \"policy_number\": \"POL-BA-{{$timestamp}}\",\n    \"amount\": {\"value\": 1200000, \"currency\": \"COP\"},\n    \"address\": \"Calle 1 # 2-3, Bogota, CO\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Mismo endpoint del BFF, distinto partner y distinto formato de payload: la traduccion la hace S9, el BFF no toca el cuerpo."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Aceptado por S9', () => pm.response.to.have.status(202));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar siniestro duplicado (409 de S9 conservado)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{bff_url}}/siniestros",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "siniestros"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{partnerId}}\",\n  \"siniestro\": {\n    \"numeroReclamo\": \"SA-{{poliza}}\",\n    \"poliza\": \"{{poliza}}\",\n    \"montoEstimado\": {{monto}},\n    \"moneda\": \"COP\",\n    \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Reusa la misma poliza del request anterior: S9 responde 409 y el BFF conserva el codigo, agregando `servicio` y `detalle`."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 duplicado (idempotencia de S9)', () => pm.response.to.have.status(409));",
+                  "pm.test('indica el servicio de origen', () => pm.expect(pm.response.json().servicio).to.eql('S9 Integraciones'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar siniestro con cuerpo invalido (400 del BFF)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{bff_url}}/siniestros",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "siniestros"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{partnerId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Falta `siniestro`: el BFF lo rechaza sin llamar a S9."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 validacion del BFF', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar la sincronizacion en S9",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/sincronizaciones/{{idSincronizacion}}",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "sincronizaciones",
+                "{{idSincronizacion}}"
+              ]
+            },
+            "description": "Confirma que S9 persistio la sincronizacion y publico el comando. `id_siniestro` viene null: S9 no conoce el id que asigna S2 (lo correlacionara la saga en la E5)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('PUBLICADA en comandos.siniestros', () => pm.expect(pm.response.json().estado).to.eql('PUBLICADA'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Detalle del siniestro (BFF -> S2)",
+      "description": "Dato propio del bounded context de S2: el BFF consulta la proyeccion estado_siniestro. Como S9 no devuelve el id_siniestro, se ubica por poliza en el listado del partner (consumo asincrono: si no aparece, reintenta en un segundo).",
+      "item": [
+        {
+          "name": "Listar siniestros del partner (ubica el recien registrado por poliza)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/partners/{{partnerId}}/siniestros",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}",
+                "siniestros"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const filas = pm.response.json();",
+                  "const mio = filas.find(f => f.poliza === pm.collectionVariables.get('poliza'));",
+                  "if (mio) { pm.collectionVariables.set('idSiniestro', mio.id_siniestro); }",
+                  "pm.test('el siniestro registrado por el BFF ya esta en S2', () => pm.expect(mio, 'todavia no esta -- reintenta en un segundo').to.exist);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Obtener detalle del siniestro",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/siniestros/{{idSiniestro}}",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "siniestros",
+                "{{idSiniestro}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test('tiene estado, partner, poliza y monto', () => { pm.expect(s).to.have.keys('id_siniestro','partner_id','estado','poliza','monto','moneda','proveedor_id','fecha_actualizacion'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Siniestro inexistente (404 de S2 conservado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/siniestros/no-existe",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "siniestros",
+                "no-existe"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('indica el servicio de origen', () => pm.expect(pm.response.json().servicio).to.eql('S2 Siniestros'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Estado de la transaccion larga (BFF -> S4 orquestador)",
+      "description": "El estado consolidado del proceso (paso actual, completada o compensada) lo responde el Saga Log del orquestador, NO se arma combinando S2+S10+S7. Contrato esperado: GET /sagas/<id_siniestro> -> {id_siniestro, paso_actual, estado, historial}. Mientras la rama del orquestador no este integrada (ORQUESTADOR_URL vacia) el BFF responde 501 con mensaje explicito.",
+      "item": [
+        {
+          "name": "Estado de la transaccion del siniestro",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/siniestros/{{idSiniestro}}/estado",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "siniestros",
+                "{{idSiniestro}}",
+                "estado"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 (orquestador integrado) o 501 (aun no integrado)', () => pm.expect([200, 501]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) {",
+                  "  const saga = pm.response.json();",
+                  "  pm.test('trae paso_actual, estado e historial', () => pm.expect(saga).to.include.keys('paso_actual','estado','historial'));",
+                  "} else {",
+                  "  console.log('Orquestador S4 no integrado todavia:', pm.response.json().error);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Reglas del partner (BFF -> S10)",
+      "description": "Dato propio del bounded context de S10: contrato del partner e historial de validaciones.",
+      "item": [
+        {
+          "name": "Reglas del partner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/reglas/{{partnerId}}",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "reglas",
+                "{{partnerId}}"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('trae monto_maximo, servicios y zonas', () => pm.expect(pm.response.json()).to.include.keys('monto_maximo','servicios_cubiertos','zonas_habilitadas'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Historial de validaciones del partner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/reglas/{{partnerId}}/validaciones?limite=10",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "reglas",
+                "{{partnerId}}",
+                "validaciones"
+              ],
+              "query": [
+                {
+                  "key": "limite",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('es una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Partner sin reglas (404 de S10 conservado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/reglas/partner-inexistente",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "reglas",
+                "partner-inexistente"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404', () => pm.response.to.have.status(404));",
+                  "pm.test('indica el servicio de origen', () => pm.expect(pm.response.json().servicio).to.eql('S10 Reglas'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5. Proveedores (BFF -> S7)",
+      "description": "Dato propio del bounded context de S7: proveedores habilitados por zona/servicio y la asignacion de un siniestro.",
+      "item": [
+        {
+          "name": "Proveedores por zona y servicio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/proveedores?zona={{zona}}&servicio={{servicio}}",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "proveedores"
+              ],
+              "query": [
+                {
+                  "key": "zona",
+                  "value": "{{zona}}"
+                },
+                {
+                  "key": "servicio",
+                  "value": "{{servicio}}"
+                }
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('es una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Proveedores sin parametros (400 del BFF)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/proveedores",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "proveedores"
+              ]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Asignacion de proveedor del siniestro",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{bff_url}}/siniestros/{{idSiniestro}}/asignacion",
+              "host": [
+                "{{bff_url}}"
+              ],
+              "path": [
+                "siniestros",
+                "{{idSiniestro}}",
+                "asignacion"
+              ]
+            },
+            "description": "404 es normal si todavia no se publico AsignarProveedor para ese siniestro (en la E4 se hace a mano; en la E5 lo hace la saga)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 (ya asignado) o 404 (aun sin asignacion)', () => pm.expect([200, 404]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
