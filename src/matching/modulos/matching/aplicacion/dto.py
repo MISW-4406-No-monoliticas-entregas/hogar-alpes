@@ -11,3 +11,14 @@ class ProveedorHabilitadoDTO(DTO):
     servicio: str = None
     zona: str = None
     disponible: bool = None
+
+
+@dataclass(frozen=True)
+class AsignacionDTO(DTO):
+    id: str = None
+    id_siniestro: str = None
+    servicio: str = None
+    zona: str = None
+    proveedor_id: str = None
+    nombre_proveedor: str = None
+    estado: str = None
