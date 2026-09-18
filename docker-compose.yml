@@ -1,5 +1,5 @@
 # Hogar de los Alpes - Entrega 4 (desarrollo local).
-# Pulsar standalone + pulsar-init (topología) + 4 PostgreSQL (uno por servicio) + servicios.
+# Pulsar standalone + pulsar-init (topología) + 4 PostgreSQL (uno por servicio) + servicios + BFF.
 # Los servicios de los compañeros quedan comentados hasta que existan sus carpetas,
 # para que `docker compose up` siempre funcione.
 services:
@@ -205,6 +205,37 @@ services:
       PORT: "5000"
     ports:
       - "8003:5000"
+
+  # ---------------------------------------------------------------------------
+  # BFF - interfaz síncrona hacia afuera (Entrega 5). Única pieza autorizada a
+  # hacerle HTTP a los demás servicios: registra por S9 y consulta S2/S10/S7 y,
+  # cuando exista, el Saga Log del orquestador (S4). Sin BD ni Pulsar.
+  # ---------------------------------------------------------------------------
+  bff:
+    build: ./src/bff
+    depends_on:
+      integraciones:
+        condition: service_started
+      siniestros:
+        condition: service_started
+      reglas:
+        condition: service_started
+      matching:
+        condition: service_started
+    environment:
+      INTEGRACIONES_URL: http://integraciones:5000
+      SINIESTROS_URL: http://siniestros:5000
+      REGLAS_URL: http://reglas:5000
+      MATCHING_URL: http://matching:5000
+      # Orquestador de sagas (S4): rama en paralelo. Mientras no exista el
+      # servicio `orquestador` en este compose, se deja sin definir y el BFF
+      # responde 501 en GET /siniestros/<id>/estado. Al integrar S4, descomentar:
+      # ORQUESTADOR_URL: http://orquestador:5000
+      TIMEOUT_CONEXION_SEGUNDOS: "2"
+      TIMEOUT_LECTURA_SEGUNDOS: "5"
+      PORT: "5000"
+    ports:
+      - "8004:5000"
 
 volumes:
   pgdata-siniestros:
