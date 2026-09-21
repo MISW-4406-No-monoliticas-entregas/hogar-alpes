@@ -1,19 +1,11 @@
 #!/usr/bin/env python3
-"""Demo end-to-end de la transaccion larga completa: S9 -> S2 -> S10 -> S7.
+"""Demo end-to-end de la transaccion larga vía el orquestador (S4) y el BFF.
 
-Corre contra el `docker compose up` local (los 4 servicios + Pulsar deben
-estar arriba). Solo usa la libreria estandar de Python (sin pip install):
-- HTTP directo con urllib para S9/S2/S10/S7 (los pasos que la rubrica permite
-  hacer por HTTP: registrar el siniestro del partner y las consultas GET).
-- `docker compose exec <servicio> python <su-propio-script>` para publicar
-  los comandos reales en comandos.reglas y comandos.matching -- Postman/Newman
-  no hablan Pulsar, y estos dos pasos SI tienen que pasar por el topico (no
-  hay atajo HTTP para AsignarProveedor en S7, a proposito). Reutiliza las
-  herramientas que ya trae cada servicio (tools/publicar_comando.py en S10,
-  scripts/publicar_prueba.py en S7) en vez de reimplementar sus esquemas Avro
-  aqui.
+Desde que existe `POST /sagas` en S4, todo el flujo es HTTP puro: ya no hace
+falta publicar nada a mano en un tópico (a diferencia de la Entrega 4). Solo
+usa la librería estándar de Python (sin `pip install`).
 
-Uso, desde la raiz del repositorio (con el compose ya levantado):
+Uso, desde la raíz del repositorio (con `docker compose up` ya levantado):
     python postman/demo.py
 """
 import json
@@ -31,17 +23,10 @@ for _flujo in (sys.stdout, sys.stderr):
     except (AttributeError, ValueError):
         pass
 
-S9 = "http://localhost:8001"
-S2 = "http://localhost:8000"
-S10 = "http://localhost:8002"
-S7 = "http://localhost:8003"
-
+ORQUESTADOR = "http://localhost:8005"
+BFF = "http://localhost:8004"
 PARTNER = "seguros-alpes"
 
-
-# --------------------------------------------------------------------------
-# HTTP directo (sin dependencias externas)
-# --------------------------------------------------------------------------
 
 def _http(metodo: str, url: str, cuerpo: Optional[dict] = None):
     datos = json.dumps(cuerpo).encode() if cuerpo is not None else None
@@ -59,7 +44,7 @@ def _http(metodo: str, url: str, cuerpo: Optional[dict] = None):
         return None, {}
 
 
-def _esperar(descripcion: str, intento_fn, intentos: int = 15, espera_seg: float = 1.0):
+def _esperar(descripcion: str, intento_fn, intentos: int = 20, espera_seg: float = 0.5):
     """Reintenta intento_fn() hasta que devuelva algo verdadero, o se agoten los intentos."""
     for _ in range(intentos):
         resultado = intento_fn()
@@ -74,104 +59,61 @@ def _titulo(texto: str):
     print(f"\n=== {texto} ===")
 
 
-# --------------------------------------------------------------------------
-# Paso 1-2: S9 registra, S2 proyecta (HTTP real)
-# --------------------------------------------------------------------------
-
-def registrar_siniestro(poliza: str, monto: float) -> Optional[str]:
-    _titulo(f"S9 -> POST /partners/{PARTNER}/siniestros (poliza {poliza})")
+def iniciar_saga(poliza: str, monto: float, servicio: str, zona: str) -> Optional[str]:
+    _titulo(f"S4 <- POST /sagas (póliza {poliza}, {servicio}/{zona})")
     cuerpo = {
-        "numeroReclamo": f"SA-{poliza}",
+        "partner_id": PARTNER,
         "poliza": poliza,
-        "montoEstimado": monto,
+        "monto": monto,
         "moneda": "COP",
+        "servicio": servicio,
+        "zona": zona,
         "direccion": {"calle": "Cra 7 # 1-2", "ciudad": "Bogota", "pais": "CO"},
     }
-    status, resp = _http("POST", f"{S9}/partners/{PARTNER}/siniestros", cuerpo)
+    status, resp = _http("POST", f"{ORQUESTADOR}/sagas", cuerpo)
     print(f"  -> {status} {resp}")
     if status != 202:
-        print("  [ERROR] S9 no aceptó el siniestro")
+        print("  [ERROR] el orquestador no aceptó la saga")
         return None
-    return resp["id_sincronizacion"]
+    return resp["id_saga"]
 
 
-def buscar_id_siniestro(poliza: str) -> Optional[str]:
+def esperar_saga_terminal(id_saga: str) -> Optional[dict]:
     def intento():
-        status, resp = _http("GET", f"{S2}/partners/{PARTNER}/siniestros")
+        status, resp = _http("GET", f"{ORQUESTADOR}/sagas/por-id/{id_saga}")
         if status != 200:
             return None
-        return next((fila for fila in resp if fila.get("poliza") == poliza), None)
+        return resp if resp.get("paso_actual") in ("COMPLETADA", "COMPENSADA") else None
 
-    fila = _esperar(f"S2 -> proyección de la póliza {poliza}", intento)
-    if fila:
-        print(f"  S2 ya lo proyectó: id_siniestro={fila['id_siniestro']} estado={fila['estado']}")
-        return fila["id_siniestro"]
-    return None
-
-
-# --------------------------------------------------------------------------
-# Paso 3: S10 valida (comando real por comandos.reglas)
-# --------------------------------------------------------------------------
-
-def publicar_validar_siniestro(id_siniestro: str, monto: float, servicio: str, zona: str):
-    _titulo("S10 <- comandos.reglas: ValidarSiniestro (tópico real, vía tools/publicar_comando.py)")
-    cmd = [
-        "docker", "compose", "exec", "-T", "reglas", "python",
-        "tools/publicar_comando.py", id_siniestro, PARTNER, str(monto), servicio, zona,
-    ]
-    print("  $", " ".join(cmd))
-    subprocess.run(cmd, check=True)
+    saga = _esperar(f"S4 -> saga {id_saga} en paso terminal", intento)
+    if saga:
+        print(
+            f"  paso_actual={saga['paso_actual']} estado={saga['estado']} "
+            f"siniestro_id={saga['siniestro_id']}"
+        )
+    return saga
 
 
-def verificar_validacion(id_siniestro: str) -> Optional[dict]:
-    def intento():
-        status, resp = _http("GET", f"{S10}/partners/{PARTNER}/validaciones")
-        if status != 200:
-            return None
-        return next((fila for fila in resp if fila.get("id_siniestro") == id_siniestro), None)
-
-    fila = _esperar(f"S10 -> validación de {id_siniestro}", intento)
-    if fila:
-        print(f"  Resultado: {fila['resultado']} ({fila['motivo']})")
-    return fila
+def verificar_via_bff(id_siniestro: str):
+    _titulo(f"BFF -> vista unificada del siniestro {id_siniestro}")
+    status, estado = _http("GET", f"{BFF}/siniestros/{id_siniestro}/estado")
+    print(f"  GET /siniestros/{id_siniestro}/estado -> {status} paso_actual={estado.get('paso_actual')}")
+    status, asignacion = _http("GET", f"{BFF}/siniestros/{id_siniestro}/asignacion")
+    proveedor = asignacion.get("nombre_proveedor") if isinstance(asignacion, dict) else None
+    print(f"  GET /siniestros/{id_siniestro}/asignacion -> {status} estado={asignacion.get('estado')} proveedor={proveedor}")
 
 
-# --------------------------------------------------------------------------
-# Paso 4: S7 asigna proveedor (comando real por comandos.matching)
-# --------------------------------------------------------------------------
-
-def publicar_asignar_proveedor(id_siniestro: str, servicio: str, zona: str):
-    _titulo("S7 <- comandos.matching: AsignarProveedor (tópico real, vía scripts/publicar_prueba.py)")
-    cmd = [
-        "docker", "compose", "exec", "-T", "matching", "python",
-        "scripts/publicar_prueba.py", "asignar", id_siniestro, servicio, zona,
-    ]
-    print("  $", " ".join(cmd))
-    subprocess.run(cmd, check=True)
-
-
-def verificar_asignacion(id_siniestro: str) -> Optional[dict]:
-    def intento():
-        status, resp = _http("GET", f"{S7}/asignaciones/{id_siniestro}")
-        return resp if status == 200 else None
-
-    fila = _esperar(f"S7 -> asignación de {id_siniestro}", intento)
-    if fila:
-        proveedor = fila.get("nombre_proveedor") or "(sin proveedor)"
-        print(f"  Estado: {fila['estado']} - proveedor: {proveedor}")
-    return fila
-
-
-def liberar_proveedor_si_quedo_asignado(id_siniestro: str, asignacion: Optional[dict]):
-    """Libera el proveedor al terminar el caso, para que el demo sea repetible.
-
-    La semilla de S7 solo trae un proveedor disponible por servicio/zona; sin
-    esto, correr el script una segunda vez ya no encontraría cobertura.
-    """
-    if not asignacion or asignacion.get("estado") != "ASIGNADA":
+def liberar_proveedor_si_quedo_asignado(id_siniestro: str, saga: dict):
+    """Limpieza para que el demo sea repetible: la semilla de S7 solo trae un
+    proveedor disponible por servicio/zona, así que sin esto una segunda
+    corrida del caso "con cobertura" ya no encontraría cobertura. En un
+    sistema real esto NO pasa solo -- una saga COMPLETADA se queda así; esto
+    es una compensación manual de conveniencia, igual que un operador
+    liberando un recurso de prueba."""
+    proveedor_id = saga.get("proveedor_id")
+    if saga.get("paso_actual") != "COMPLETADA" or not proveedor_id:
         return
-    proveedor_id = asignacion.get("proveedor_id")
-    _titulo(f"S7 <- comandos.matching: LiberarProveedor (limpieza, deja el proveedor libre de nuevo)")
+    _titulo("(limpieza) liberando el proveedor para que el demo sea repetible")
     cmd = [
         "docker", "compose", "exec", "-T", "matching", "python",
         "scripts/publicar_prueba.py", "liberar", id_siniestro, proveedor_id,
@@ -180,34 +122,28 @@ def liberar_proveedor_si_quedo_asignado(id_siniestro: str, asignacion: Optional[
     subprocess.run(cmd, check=True)
 
 
-# --------------------------------------------------------------------------
-# Orquestación de un caso completo
-# --------------------------------------------------------------------------
-
 def correr_caso(nombre: str, poliza: str, monto: float, servicio: str, zona: str) -> dict:
     print(f"\n{'#' * 72}\n CASO: {nombre}\n{'#' * 72}")
     resultado = {"caso": nombre, "poliza": poliza}
 
-    if not registrar_siniestro(poliza, monto):
-        resultado["estado"] = "FALLÓ EN S9"
+    id_saga = iniciar_saga(poliza, monto, servicio, zona)
+    if not id_saga:
+        resultado["estado"] = "FALLÓ AL INICIAR"
         return resultado
+    resultado["id_saga"] = id_saga
 
-    id_siniestro = buscar_id_siniestro(poliza)
-    if not id_siniestro:
-        resultado["estado"] = "FALLÓ EN S2 (no llegó a la proyección)"
+    saga = esperar_saga_terminal(id_saga)
+    if not saga:
+        resultado["estado"] = "TIMEOUT ESPERANDO LA SAGA"
         return resultado
-    resultado["id_siniestro"] = id_siniestro
+    resultado["id_siniestro"] = saga["siniestro_id"]
+    resultado["paso_actual"] = saga["paso_actual"]
+    resultado["saga_estado"] = saga["estado"]
+    resultado["proveedor"] = saga.get("proveedor_id")
+    resultado["motivo_fallo"] = saga.get("motivo_fallo")
 
-    publicar_validar_siniestro(id_siniestro, monto, servicio, zona)
-    validacion = verificar_validacion(id_siniestro)
-    resultado["reglas"] = validacion["resultado"] if validacion else "SIN RESPUESTA"
-
-    publicar_asignar_proveedor(id_siniestro, servicio, zona)
-    asignacion = verificar_asignacion(id_siniestro)
-    resultado["matching"] = asignacion["estado"] if asignacion else "SIN RESPUESTA"
-    resultado["proveedor"] = asignacion.get("nombre_proveedor") if asignacion else None
-
-    liberar_proveedor_si_quedo_asignado(id_siniestro, asignacion)
+    verificar_via_bff(saga["siniestro_id"])
+    liberar_proveedor_si_quedo_asignado(saga["siniestro_id"], saga)
 
     resultado["estado"] = "OK"
     return resultado
@@ -237,9 +173,13 @@ def main():
     for r in resultados:
         print(f"\n- {r['caso']}")
         print(f"    póliza        : {r['poliza']}")
+        print(f"    id_saga       : {r.get('id_saga', '-')}")
         print(f"    id_siniestro  : {r.get('id_siniestro', '-')}")
-        print(f"    S10 (reglas)  : {r.get('reglas', '-')}")
-        print(f"    S7 (matching) : {r.get('matching', '-')} ({r.get('proveedor') or 'sin proveedor'})")
+        print(f"    paso_actual   : {r.get('paso_actual', '-')} (saga {r.get('saga_estado', '-')})")
+        if r.get("proveedor"):
+            print(f"    proveedor     : {r['proveedor']}")
+        if r.get("motivo_fallo"):
+            print(f"    motivo_fallo  : {r['motivo_fallo']}")
         if r["estado"] != "OK":
             hubo_falla = True
             print(f"    [FALLÓ]       : {r['estado']}")

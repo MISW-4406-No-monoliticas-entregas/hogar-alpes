@@ -1,11 +1,12 @@
 {
   "info": {
-    "name": "Hogar de los Alpes - E4 - Flujo E2E (S9 -> S2 -> S10 -> S7)",
-    "description": "Recorre la transaccion larga completa contra el docker compose local: S9 registra el siniestro de un partner, S2 lo persiste (event store + proyeccion), S10 lo valida contra el contrato del partner y S7 reserva un proveedor. Como Postman/Newman no hablan Pulsar, los pasos 3 y 4 publican el comando REAL en su topico (comandos.reglas / comandos.matching) desde fuera de esta coleccion -- ver postman/demo.py o las notas de cada carpeta. Los GET de esta coleccion sirven para explorar/verificar cada paso a mano en la UI de Postman; para correr todo de punta a punta automaticamente usa postman/demo.py.",
+    "name": "Hogar de los Alpes - E5 - Saga completa + BFF",
+    "description": "Recorre la transaccion larga completa de la Entrega 5: arranca la saga en el orquestador (S4), la deja correr sola por comandos/eventos en Pulsar (registro en S2, validacion en S10, asignacion en S7, o compensacion si algo falla), y hace el seguimiento a traves del BFF, que es la unica puerta sincrona hacia afuera. A diferencia de la coleccion de la Entrega 4, YA NO hace falta publicar nada a mano en un topico: POST /sagas es HTTP puro y el resto avanza solo. Para correr todo de punta a punta en un solo comando (con polling automatico) usa postman/demo.py.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "s9", "value": "http://localhost:8001" },
+    { "key": "orquestador", "value": "http://localhost:8005" },
+    { "key": "bff", "value": "http://localhost:8004" },
     { "key": "s2", "value": "http://localhost:8000" },
     { "key": "s10", "value": "http://localhost:8002" },
     { "key": "s7", "value": "http://localhost:8003" },
@@ -18,38 +19,75 @@
     { "key": "montoSinCobertura", "value": "300000" },
     { "key": "polizaConCobertura", "value": "" },
     { "key": "polizaSinCobertura", "value": "" },
-    { "key": "idSincronizacionConCobertura", "value": "" },
-    { "key": "idSincronizacionSinCobertura", "value": "" },
+    { "key": "idSagaConCobertura", "value": "" },
+    { "key": "idSagaSinCobertura", "value": "" },
     { "key": "idSiniestroConCobertura", "value": "" },
-    { "key": "idSiniestroSinCobertura", "value": "" }
+    { "key": "idSiniestroSinCobertura", "value": "" },
+    { "key": "polizaLegado", "value": "" },
+    { "key": "idSincronizacionLegado", "value": "" }
   ],
   "item": [
     {
-      "name": "1. S9 - Registrar siniestro (partner seguros-alpes)",
-      "description": "Unica entrada HTTP externa del sistema. S9 traduce el formato propio del partner (ver src/integraciones/modulos/sincronizaciones/aplicacion/traductores/seguros_alpes.py), lo idempotiza por (partner_id, numeroReclamo) y publica RegistrarSiniestro en comandos.siniestros. NOTA: en esta entrega S9 no se entera del id_siniestro que le asigna S2 (no hay saga todavia); por eso el paso 2 busca el siniestro por numero de poliza, no por id.",
+      "name": "0. Salud (BFF y sus 5 dependencias)",
       "item": [
         {
-          "name": "Registrar siniestro CON cobertura (plomeria / bogota-norte)",
+          "name": "GET /salud",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));"
+              ]}
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{bff}}/salud", "host": ["{{bff}}"], "path": ["salud"] }
+          }
+        },
+        {
+          "name": "GET /salud/dependencias",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "const r = pm.response.json();",
+                "['S9 Integraciones','S2 Siniestros','S10 Reglas','S7 Matching','S4 Orquestador'].forEach(s => {",
+                "  pm.test(s + ' arriba', () => pm.expect(r[s].estado).to.eql('ok'));",
+                "});"
+              ]}
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{bff}}/salud/dependencias", "host": ["{{bff}}"], "path": ["salud", "dependencias"] },
+            "description": "Los 5 servicios deben quedar 'ok'. Si S4 Orquestador sale 'no_integrado', su rama no esta mezclada a main."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Iniciar la transaccion larga (S4 Orquestador)",
+      "description": "Unico paso sincrono de todo el flujo: POST /sagas arranca la transaccion larga completa (registro en S2 -> validacion en S10 -> asignacion en S7). Desde aqui todo avanza solo por comandos y eventos en Pulsar -- a diferencia de la Entrega 4, no hace falta publicar nada a mano.",
+      "item": [
+        {
+          "name": "POST /sagas - CON cobertura (plomeria / bogota-norte)",
           "event": [
             {
               "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.collectionVariables.set('polizaConCobertura', 'POL-DEMO-COBERTURA-' + Date.now());"
-                ]
-              }
+              "script": { "type": "text/javascript", "exec": [
+                "pm.collectionVariables.set('polizaConCobertura', 'POL-DEMO-COBERTURA-' + Date.now());"
+              ]}
             },
             {
               "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('202 Aceptado', function () { pm.response.to.have.status(202); });",
-                  "const json = pm.response.json();",
-                  "if (json.id_sincronizacion) { pm.collectionVariables.set('idSincronizacionConCobertura', json.id_sincronizacion); }"
-                ]
-              }
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
+                "const json = pm.response.json();",
+                "pm.test('paso_actual PENDIENTE', () => pm.expect(json.paso_actual).to.eql('PENDIENTE'));",
+                "if (json.id_saga) { pm.collectionVariables.set('idSagaConCobertura', json.id_saga); }"
+              ]}
             }
           ],
           "request": {
@@ -57,38 +95,28 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"numeroReclamo\": \"SA-{{polizaConCobertura}}\",\n  \"poliza\": \"{{polizaConCobertura}}\",\n  \"montoEstimado\": {{montoConCobertura}},\n  \"moneda\": \"COP\",\n  \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n}"
+              "raw": "{\n  \"partner_id\": \"{{partnerId}}\",\n  \"poliza\": \"{{polizaConCobertura}}\",\n  \"monto\": {{montoConCobertura}},\n  \"moneda\": \"COP\",\n  \"servicio\": \"{{servicioConCobertura}}\",\n  \"zona\": \"{{zonaConCobertura}}\",\n  \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n}"
             },
-            "url": {
-              "raw": "{{s9}}/partners/{{partnerId}}/siniestros",
-              "host": ["{{s9}}"],
-              "path": ["partners", "{{partnerId}}", "siniestros"]
-            },
-            "description": "El servicio (plomeria/bogota-norte) no viaja en este payload -- S9/S2 no modelan 'servicio'. Se elige a mano mas adelante, al publicar ValidarSiniestro/AsignarProveedor (asi opera esta entrega parcial, sin saga)."
+            "url": { "raw": "{{orquestador}}/sagas", "host": ["{{orquestador}}"], "path": ["sagas"] },
+            "description": "seguros-alpes cubre plomeria/electricidad/carpinteria en bogota-norte (S10) y S7 tiene un proveedor de plomeria disponible ahi -- este caso deberia terminar COMPLETADA."
           }
         },
         {
-          "name": "Registrar siniestro SIN cobertura de proveedor (carpinteria / bogota-norte)",
+          "name": "POST /sagas - SIN cobertura de proveedor (carpinteria / bogota-norte)",
           "event": [
             {
               "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.collectionVariables.set('polizaSinCobertura', 'POL-DEMO-SINCOBERTURA-' + Date.now());"
-                ]
-              }
+              "script": { "type": "text/javascript", "exec": [
+                "pm.collectionVariables.set('polizaSinCobertura', 'POL-DEMO-SINCOBERTURA-' + Date.now());"
+              ]}
             },
             {
               "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('202 Aceptado', function () { pm.response.to.have.status(202); });",
-                  "const json = pm.response.json();",
-                  "if (json.id_sincronizacion) { pm.collectionVariables.set('idSincronizacionSinCobertura', json.id_sincronizacion); }"
-                ]
-              }
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
+                "const json = pm.response.json();",
+                "if (json.id_saga) { pm.collectionVariables.set('idSagaSinCobertura', json.id_saga); }"
+              ]}
             }
           ],
           "request": {
@@ -96,260 +124,277 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"numeroReclamo\": \"SA-{{polizaSinCobertura}}\",\n  \"poliza\": \"{{polizaSinCobertura}}\",\n  \"montoEstimado\": {{montoSinCobertura}},\n  \"moneda\": \"COP\",\n  \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n}"
+              "raw": "{\n  \"partner_id\": \"{{partnerId}}\",\n  \"poliza\": \"{{polizaSinCobertura}}\",\n  \"monto\": {{montoSinCobertura}},\n  \"moneda\": \"COP\",\n  \"servicio\": \"{{servicioSinCobertura}}\",\n  \"zona\": \"{{zonaSinCobertura}}\",\n  \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n}"
             },
-            "url": {
-              "raw": "{{s9}}/partners/{{partnerId}}/siniestros",
-              "host": ["{{s9}}"],
-              "path": ["partners", "{{partnerId}}", "siniestros"]
-            }
+            "url": { "raw": "{{orquestador}}/sagas", "host": ["{{orquestador}}"], "path": ["sagas"] },
+            "description": "seguros-alpes tambien cubre carpinteria en bogota-norte (S10 aprueba igual), pero S7 no tiene ningun carpintero disponible ahi -- este caso deberia terminar COMPENSADA (RechazarSiniestro publicado hacia S2)."
           }
         },
         {
-          "name": "(info) Obtener sincronizacion",
+          "name": "POST /sagas - faltan campos -> 400",
           "event": [
             {
               "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
-                  "console.log('id_siniestro sigue null en esta entrega (sin saga): ', pm.response.json().id_siniestro);"
-                ]
-              }
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('400', () => pm.response.to.have.status(400));"
+              ]}
             }
           ],
           "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{s9}}/sincronizaciones/{{idSincronizacionConCobertura}}",
-              "host": ["{{s9}}"],
-              "path": ["sincronizaciones", "{{idSincronizacionConCobertura}}"]
-            },
-            "description": "Utilidad informativa: confirma que S9 marco la sincronizacion como PUBLICADA. `id_siniestro` queda null porque en la E4 no hay saga que correlacione de vuelta el id que le asigno S2."
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"partner_id\": \"{{partnerId}}\"\n}" },
+            "url": { "raw": "{{orquestador}}/sagas", "host": ["{{orquestador}}"], "path": ["sagas"] }
           }
         }
       ]
     },
     {
-      "name": "2. S2 - Verificar registro (event store + proyeccion)",
-      "description": "S2 consumio RegistrarSiniestro de comandos.siniestros y actualizo su proyeccion estado_siniestro. Como S9 no conoce el id_siniestro (ver carpeta 1), lo ubicamos por numero de poliza en el listado del partner.",
+      "name": "2. Seguimiento de la saga",
+      "description": "El paso 1 tarda 1-3 segundos en llegar a un paso terminal (COMPLETADA o COMPENSADA). Si un test de esta carpeta falla porque el paso todavia no es terminal, espera un segundo y vuelve a correr la misma request -- no hace falta repetir el paso 1.",
       "item": [
         {
-          "name": "Listar siniestros del partner (ubica los dos por poliza)",
+          "name": "GET /sagas/por-id/:idSaga - CON cobertura",
           "event": [
             {
               "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
-                  "const filas = pm.response.json();",
-                  "const conCobertura = filas.find(f => f.poliza === pm.collectionVariables.get('polizaConCobertura'));",
-                  "const sinCobertura = filas.find(f => f.poliza === pm.collectionVariables.get('polizaSinCobertura'));",
-                  "if (conCobertura) { pm.collectionVariables.set('idSiniestroConCobertura', conCobertura.id_siniestro); }",
-                  "if (sinCobertura) { pm.collectionVariables.set('idSiniestroSinCobertura', sinCobertura.id_siniestro); }",
-                  "pm.test('siniestro CON cobertura ya aparece en la proyeccion', function () { pm.expect(conCobertura, 'todavia no esta -- reintenta esta request en un segundo').to.exist; });",
-                  "pm.test('siniestro SIN cobertura ya aparece en la proyeccion', function () { pm.expect(sinCobertura, 'todavia no esta -- reintenta esta request en un segundo').to.exist; });"
-                ]
-              }
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "const json = pm.response.json();",
+                "if (json.siniestro_id) { pm.collectionVariables.set('idSiniestroConCobertura', json.siniestro_id); }",
+                "pm.test('llego a paso terminal (si dice PENDIENTE/INICIADA/... todavia no, reintenta)', () => {",
+                "  pm.expect(['COMPLETADA', 'COMPENSADA']).to.include(json.paso_actual);",
+                "});",
+                "pm.test('quedo COMPLETADA con proveedor', () => {",
+                "  pm.expect(json.paso_actual).to.eql('COMPLETADA');",
+                "  pm.expect(json.estado).to.eql('OK');",
+                "  pm.expect(json.proveedor_id).to.not.be.null;",
+                "});"
+              ]}
             }
           ],
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{s2}}/partners/{{partnerId}}/siniestros",
-              "host": ["{{s2}}"],
-              "path": ["partners", "{{partnerId}}", "siniestros"]
+              "raw": "{{orquestador}}/sagas/por-id/{{idSagaConCobertura}}",
+              "host": ["{{orquestador}}"], "path": ["sagas", "por-id", "{{idSagaConCobertura}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /sagas/por-id/:idSaga - SIN cobertura",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "const json = pm.response.json();",
+                "if (json.siniestro_id) { pm.collectionVariables.set('idSiniestroSinCobertura', json.siniestro_id); }",
+                "pm.test('quedo COMPENSADA por falta de proveedor', () => {",
+                "  pm.expect(json.paso_actual).to.eql('COMPENSADA');",
+                "  pm.expect(json.estado).to.eql('FALLIDO');",
+                "  pm.expect(json.motivo_fallo).to.include('proveedor');",
+                "});"
+              ]}
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{orquestador}}/sagas/por-id/{{idSagaSinCobertura}}",
+              "host": ["{{orquestador}}"], "path": ["sagas", "por-id", "{{idSagaSinCobertura}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /siniestros/:id/estado (mismo dato, vía BFF)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "pm.test('coincide con la consulta directa al orquestador', () => {",
+                "  pm.expect(pm.response.json().paso_actual).to.eql('COMPLETADA');",
+                "});"
+              ]}
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{bff}}/siniestros/{{idSiniestroConCobertura}}/estado",
+              "host": ["{{bff}}"], "path": ["siniestros", "{{idSiniestroConCobertura}}", "estado"]
             },
-            "description": "Si algun test falla porque 'todavia no esta', es consumo asincrono normal: espera un segundo y vuelve a correr esta misma request (no hace falta repetir el paso 1)."
-          }
-        },
-        {
-          "name": "Obtener siniestro CON cobertura (proyeccion)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
-                  "pm.test('estado REGISTRADO', function () { pm.expect(pm.response.json().estado).to.eql('REGISTRADO'); });"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{s2}}/siniestros/{{idSiniestroConCobertura}}",
-              "host": ["{{s2}}"],
-              "path": ["siniestros", "{{idSiniestroConCobertura}}"]
-            }
-          }
-        },
-        {
-          "name": "Obtener siniestro SIN cobertura (proyeccion)",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{s2}}/siniestros/{{idSiniestroSinCobertura}}",
-              "host": ["{{s2}}"],
-              "path": ["siniestros", "{{idSiniestroSinCobertura}}"]
-            }
+            "description": "Prueba que el BFF es una puerta real hacia el Saga Log del orquestador, no una copia."
           }
         }
       ]
     },
     {
-      "name": "3. S10 - Validar siniestro (comandos.reglas)",
-      "description": "IMPORTANTE: Postman/Newman no publican en Pulsar. Antes de correr los GET de esta carpeta, publica el comando real ValidarSiniestro en comandos.reglas para cada siniestro (usa postman/demo.py, o a mano dentro del contenedor):\n\n  docker compose exec reglas python tools/publicar_comando.py {{idSiniestroConCobertura}} {{partnerId}} {{montoConCobertura}} {{servicioConCobertura}} {{zonaConCobertura}}\n  docker compose exec reglas python tools/publicar_comando.py {{idSiniestroSinCobertura}} {{partnerId}} {{montoSinCobertura}} {{servicioSinCobertura}} {{zonaSinCobertura}}\n\nEl contrato de seguros-alpes (ver src/reglas/modulos/reglas/infraestructura/semilla.py) cubre plomeria/electricidad/carpinteria en bogota-norte/bogota-centro/medellin hasta 8.000.000 COP, asi que AMBOS siniestros de este demo quedan APROBADOS por reglas -- la diferencia entre 'con cobertura' y 'sin cobertura' la pone S7 en el paso 4 (disponibilidad de proveedor), no S10.",
+      "name": "3. Vista unificada del siniestro (vía BFF)",
+      "description": "El BFF es la unica pieza autorizada a hacerle HTTP a los demas servicios; ninguna de estas rutas combina respuestas de varios servicios, cada una reenvia a un solo dueño (ver src/bff/README.md).",
       "item": [
         {
-          "name": "(contexto) Ver contrato del partner",
+          "name": "GET /partners/:id/siniestros (listado, vía S2)",
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{s10}}/partners/{{partnerId}}/reglas",
-              "host": ["{{s10}}"],
-              "path": ["partners", "{{partnerId}}", "reglas"]
+              "raw": "{{bff}}/partners/{{partnerId}}/siniestros",
+              "host": ["{{bff}}"], "path": ["partners", "{{partnerId}}", "siniestros"]
             }
           }
         },
         {
-          "name": "Listar validaciones del partner (tras publicar el comando)",
+          "name": "GET /reglas/:partner (contrato, vía S10)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{bff}}/reglas/{{partnerId}}",
+              "host": ["{{bff}}"], "path": ["reglas", "{{partnerId}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /siniestros/:id (detalle, vía S2)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{bff}}/siniestros/{{idSiniestroConCobertura}}",
+              "host": ["{{bff}}"], "path": ["siniestros", "{{idSiniestroConCobertura}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /siniestros/:id/asignacion (vía S7)",
           "event": [
             {
               "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
-                  "const filas = pm.response.json();",
-                  "const conCobertura = filas.find(f => f.id_siniestro === pm.collectionVariables.get('idSiniestroConCobertura'));",
-                  "const sinCobertura = filas.find(f => f.id_siniestro === pm.collectionVariables.get('idSiniestroSinCobertura'));",
-                  "pm.test('validacion del siniestro CON cobertura existe y esta APROBADA', function () {",
-                  "  pm.expect(conCobertura, 'aun no llega -- publica el comando y reintenta').to.exist;",
-                  "  if (conCobertura) pm.expect(conCobertura.resultado).to.eql('APROBADO');",
-                  "});",
-                  "pm.test('validacion del siniestro SIN cobertura existe y esta APROBADA', function () {",
-                  "  pm.expect(sinCobertura, 'aun no llega -- publica el comando y reintenta').to.exist;",
-                  "  if (sinCobertura) pm.expect(sinCobertura.resultado).to.eql('APROBADO');",
-                  "});"
-                ]
-              }
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "pm.test('estado ASIGNADA', () => pm.expect(pm.response.json().estado).to.eql('ASIGNADA'));"
+              ]}
             }
           ],
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{s10}}/partners/{{partnerId}}/validaciones",
-              "host": ["{{s10}}"],
-              "path": ["partners", "{{partnerId}}", "validaciones"]
+              "raw": "{{bff}}/siniestros/{{idSiniestroConCobertura}}/asignacion",
+              "host": ["{{bff}}"], "path": ["siniestros", "{{idSiniestroConCobertura}}", "asignacion"]
             }
           }
-        }
-      ]
-    },
-    {
-      "name": "4. S7 - Asignar proveedor (comandos.matching)",
-      "description": "IMPORTANTE: igual que en el paso 3, Postman no puede publicar en Pulsar. Publica el comando real AsignarProveedor en comandos.matching (usa postman/demo.py, o a mano dentro del contenedor):\n\n  docker compose exec matching python scripts/publicar_prueba.py asignar {{idSiniestroConCobertura}} {{servicioConCobertura}} {{zonaConCobertura}}\n  docker compose exec matching python scripts/publicar_prueba.py asignar {{idSiniestroSinCobertura}} {{servicioSinCobertura}} {{zonaSinCobertura}}\n\nLa semilla de S7 (ver src/matching/modulos/matching/infraestructura/semilla.py) tiene proveedores disponibles de plomeria en bogota-norte, pero NINGUNO disponible de carpinteria en bogota-norte -- por eso el primer comando termina en ProveedorAsignado y el segundo en SinProveedorDisponible.",
-      "item": [
+        },
         {
-          "name": "(antes) Proveedores de plomeria en bogota-norte",
+          "name": "GET /reglas/:partner/validaciones (vía S10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "pm.test('es una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+              ]}
+            }
+          ],
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{s7}}/proveedores?zona={{zonaConCobertura}}&servicio={{servicioConCobertura}}",
-              "host": ["{{s7}}"],
-              "path": ["proveedores"],
+              "raw": "{{bff}}/reglas/{{partnerId}}/validaciones?limite=10",
+              "host": ["{{bff}}"], "path": ["reglas", "{{partnerId}}", "validaciones"],
+              "query": [{ "key": "limite", "value": "10" }]
+            }
+          }
+        },
+        {
+          "name": "GET /proveedores?zona=&servicio= (vía S7)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{bff}}/proveedores?zona={{zonaConCobertura}}&servicio={{servicioConCobertura}}",
+              "host": ["{{bff}}"], "path": ["proveedores"],
               "query": [
                 { "key": "zona", "value": "{{zonaConCobertura}}" },
                 { "key": "servicio", "value": "{{servicioConCobertura}}" }
               ]
             }
           }
-        },
+        }
+      ]
+    },
+    {
+      "name": "4. Registro directo sin saga (legado, vía BFF)",
+      "description": "POST /siniestros del BFF reenvia tal cual a S9 -- NO arranca una saga (el orquestador no se entera). Es la misma entrada que ya existia en la Entrega 4; se conserva porque S9 sigue siendo la ACL de partners para quien no necesite orquestacion.",
+      "item": [
         {
-          "name": "(antes) Proveedores de carpinteria en bogota-norte",
-          "request": {
-            "method": "GET",
-            "url": {
-              "raw": "{{s7}}/proveedores?zona={{zonaSinCobertura}}&servicio={{servicioSinCobertura}}",
-              "host": ["{{s7}}"],
-              "path": ["proveedores"],
-              "query": [
-                { "key": "zona", "value": "{{zonaSinCobertura}}" },
-                { "key": "servicio", "value": "{{servicioSinCobertura}}" }
-              ]
+          "name": "POST /siniestros (sin saga)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.collectionVariables.set('polizaLegado', 'POL-LEGADO-' + Date.now());"
+              ]}
+            },
+            {
+              "listen": "test",
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
+                "const json = pm.response.json();",
+                "if (json.id_sincronizacion) { pm.collectionVariables.set('idSincronizacionLegado', json.id_sincronizacion); }"
+              ]}
             }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{partnerId}}\",\n  \"siniestro\": {\n    \"numeroReclamo\": \"SA-{{polizaLegado}}\",\n    \"poliza\": \"{{polizaLegado}}\",\n    \"montoEstimado\": 500000,\n    \"moneda\": \"COP\",\n    \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n  }\n}"
+            },
+            "url": { "raw": "{{bff}}/siniestros", "host": ["{{bff}}"], "path": ["siniestros"] }
           }
         },
         {
-          "name": "Asignacion del siniestro CON cobertura -> ProveedorAsignado",
+          "name": "GET /sincronizaciones/:id (vía S9)",
           "event": [
             {
               "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200 OK (si da 404, aun no llega el comando: publica y reintenta)', function () { pm.response.to.have.status(200); });",
-                  "pm.test('estado ASIGNADA con proveedor', function () {",
-                  "  const json = pm.response.json();",
-                  "  pm.expect(json.estado).to.eql('ASIGNADA');",
-                  "  pm.expect(json.proveedor_id).to.not.be.null;",
-                  "});"
-                ]
-              }
+              "script": { "type": "text/javascript", "exec": [
+                "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                "console.log('id_siniestro sigue null si no hay saga que lo correlacione:', pm.response.json().id_siniestro);"
+              ]}
             }
           ],
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{s7}}/asignaciones/{{idSiniestroConCobertura}}",
-              "host": ["{{s7}}"],
-              "path": ["asignaciones", "{{idSiniestroConCobertura}}"]
+              "raw": "{{bff}}/sincronizaciones/{{idSincronizacionLegado}}",
+              "host": ["{{bff}}"], "path": ["sincronizaciones", "{{idSincronizacionLegado}}"]
             }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Consultas directas a cada servicio (depuración, sin BFF)",
+      "description": "Las mismas consultas del paso 3, pero pegandole directo a cada servicio en vez de al BFF -- util para aislar si una falla es del BFF o del servicio dueño.",
+      "item": [
+        {
+          "name": "S2 - GET /siniestros/:id",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{s2}}/siniestros/{{idSiniestroConCobertura}}", "host": ["{{s2}}"], "path": ["siniestros", "{{idSiniestroConCobertura}}"] }
           }
         },
         {
-          "name": "Asignacion del siniestro SIN cobertura -> SinProveedorDisponible",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('200 OK (si da 404, aun no llega el comando: publica y reintenta)', function () { pm.response.to.have.status(200); });",
-                  "pm.test('estado SIN_PROVEEDOR', function () {",
-                  "  pm.expect(pm.response.json().estado).to.eql('SIN_PROVEEDOR');",
-                  "});"
-                ]
-              }
-            }
-          ],
+          "name": "S10 - GET /partners/:id/reglas",
           "request": {
             "method": "GET",
-            "url": {
-              "raw": "{{s7}}/asignaciones/{{idSiniestroSinCobertura}}",
-              "host": ["{{s7}}"],
-              "path": ["asignaciones", "{{idSiniestroSinCobertura}}"]
-            }
+            "url": { "raw": "{{s10}}/partners/{{partnerId}}/reglas", "host": ["{{s10}}"], "path": ["partners", "{{partnerId}}", "reglas"] }
           }
         },
         {
-          "name": "(despues) Proveedores de plomeria en bogota-norte (uno debe quedar disponible=false)",
+          "name": "S7 - GET /asignaciones/:id",
           "request": {
             "method": "GET",
-            "url": {
-              "raw": "{{s7}}/proveedores?zona={{zonaConCobertura}}&servicio={{servicioConCobertura}}",
-              "host": ["{{s7}}"],
-              "path": ["proveedores"],
-              "query": [
-                { "key": "zona", "value": "{{zonaConCobertura}}" },
-                { "key": "servicio", "value": "{{servicioConCobertura}}" }
-              ]
-            }
+            "url": { "raw": "{{s7}}/asignaciones/{{idSiniestroConCobertura}}", "host": ["{{s7}}"], "path": ["asignaciones", "{{idSiniestroConCobertura}}"] }
           }
         }
       ]
