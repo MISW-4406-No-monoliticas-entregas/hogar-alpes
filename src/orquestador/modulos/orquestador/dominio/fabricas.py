@@ -1,4 +1,4 @@
-"""Fábrica del agregado Saga."""
+"""Fabrica del agregado Saga."""
 from dataclasses import dataclass
 
 from seedwork.dominio.fabricas import Fabrica
@@ -13,4 +13,21 @@ class FabricaSaga(Fabrica):
     def iniciar_saga(self, siniestro_id: str) -> Saga:
         saga = Saga()
         saga.iniciar(siniestro_id)
+        return saga
+
+    def iniciar_saga_pendiente(self, partner_id: str, poliza: str, servicio: str,
+                               zona: str, monto: float, moneda: str, calle: str,
+                               ciudad: str, pais: str) -> Saga:
+        saga = Saga()
+        saga.iniciar_pendiente(
+            partner_id=partner_id,
+            poliza=poliza,
+            servicio=servicio,
+            zona=zona,
+            monto=monto,
+            moneda=moneda,
+            calle=calle,
+            ciudad=ciudad,
+            pais=pais,
+        )
         return saga

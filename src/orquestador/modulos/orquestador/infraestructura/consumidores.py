@@ -1,15 +1,22 @@
-"""Consumidores de eventos.reglas y eventos.matching: el orquestador
-reacciona a los dos fallos del camino feliz que le tocan a D, y registra de
-verdad lo que S7 confirma (ya no es un script de prueba invocado a mano).
+"""Consumidores del orquestador: tres suscripciones, una por servicio que
+participa en la saga.
 
-Usa el ConsumidorBase del seedwork (Key_Shared + ack tardío + nack), igual
-que los otros 4 servicios. Nadie los arranca todavía desde un main.py -- eso
-es ensamblar el servicio completo, fuera del alcance de este slice (ver
-README). Quedan listos para que quien lo arme los conecte igual que a los
-demás consumidores.
+    eventos.siniestros  SiniestroRegistrado          -> vincula y pasa a VALIDANDO
+    eventos.reglas      SiniestroAprobadoPorReglas   -> pasa a ASIGNANDO
+                        SiniestroRechazadoPorReglas  -> compensa (D)
+    eventos.matching    ProveedorAsignado            -> anota (D) y COMPLETADA
+                        SinProveedorDisponible       -> compensa (D)
+
+Usan el ConsumidorBase del seedwork (Key_Shared + ack tardio + nack), igual que
+los otros 4 servicios, y cada handler es idempotente por el id del mensaje.
+
+Cuando un mismo evento dispara dos comandos (ProveedorAsignado), el segundo usa
+un id_mensaje derivado: si los dos registraran el mismo id, el segundo se veria
+como duplicado y no correria.
 """
 from config.settings import (
     PULSAR_URL,
+    TOPICO_EVENTOS_SINIESTROS,
     TOPICO_EVENTOS_REGLAS,
     TOPICO_EVENTOS_MATCHING,
     SUSCRIPCION,
@@ -20,8 +27,50 @@ from modulos.orquestador.aplicacion.comandos.compensaciones import (
     CompensarSaga,
     RegistrarProveedorAsignado,
 )
+from modulos.orquestador.aplicacion.comandos.pasos_felices import (
+    VincularSiniestro,
+    AvanzarAAsignacion,
+    CompletarSaga,
+)
+from modulos.orquestador.infraestructura.schema.v1.eventos_siniestros import (
+    EventoSiniestros,
+)
 from modulos.orquestador.infraestructura.schema.v1.eventos_reglas import EventoReglas
 from modulos.orquestador.infraestructura.schema.v1.eventos_matching import EventoMatching
+
+
+def _al_siniestro_registrado(sobre):
+    ejecutar_comando(
+        VincularSiniestro(
+            partner_id=sobre.data.partner_id,
+            poliza=sobre.data.poliza,
+            siniestro_id=sobre.data.id_siniestro,
+            monto=sobre.data.monto,
+            moneda=sobre.data.moneda or "COP",
+            id_mensaje=sobre.id,
+        )
+    )
+
+
+def suscribirse_a_eventos_siniestros(url_broker: str = PULSAR_URL):
+    ConsumidorBase(
+        url_broker=url_broker,
+        topico=TOPICO_EVENTOS_SINIESTROS,
+        suscripcion=f"{SUSCRIPCION}-eventos-siniestros",
+        schema_sobre=EventoSiniestros,
+        manejadores={"SiniestroRegistrado": _al_siniestro_registrado},
+    ).iniciar()
+
+
+def _al_siniestro_aprobado_por_reglas(sobre):
+    ejecutar_comando(
+        AvanzarAAsignacion(
+            siniestro_id=sobre.data.id_siniestro,
+            servicio=sobre.data.servicio,
+            zona=sobre.data.zona,
+            id_mensaje=sobre.id,
+        )
+    )
 
 
 def _al_siniestro_rechazado_por_reglas(sobre):
@@ -35,7 +84,10 @@ def _al_siniestro_rechazado_por_reglas(sobre):
 
 
 def suscribirse_a_eventos_reglas(url_broker: str = PULSAR_URL):
-    manejadores = {"SiniestroRechazadoPorReglas": _al_siniestro_rechazado_por_reglas}
+    manejadores = {
+        "SiniestroAprobadoPorReglas": _al_siniestro_aprobado_por_reglas,
+        "SiniestroRechazadoPorReglas": _al_siniestro_rechazado_por_reglas,
+    }
     ConsumidorBase(
         url_broker=url_broker,
         topico=TOPICO_EVENTOS_REGLAS,
@@ -61,6 +113,12 @@ def _al_proveedor_asignado(sobre):
             siniestro_id=sobre.data.id_siniestro,
             proveedor_id=sobre.data.proveedor_id,
             id_mensaje=sobre.id,
+        )
+    )
+    ejecutar_comando(
+        CompletarSaga(
+            siniestro_id=sobre.data.id_siniestro,
+            id_mensaje=f"{sobre.id}:completar" if sobre.id else None,
         )
     )
 
