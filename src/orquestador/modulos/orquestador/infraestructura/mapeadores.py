@@ -15,6 +15,10 @@ class MapeadorSagaDTO:
             estado=s.estado.value,
             proveedor_id=s.proveedor_id,
             motivo_fallo=s.motivo_fallo,
+            partner_id=s.partner_id,
+            poliza=s.poliza,
+            servicio=s.servicio,
+            zona=s.zona,
             fecha_creacion=s.fecha_creacion,
             fecha_actualizacion=s.fecha_actualizacion,
         )
@@ -27,6 +31,10 @@ class MapeadorSagaDTO:
             estado=EstadoSaga(dto.estado),
             proveedor_id=dto.proveedor_id,
             motivo_fallo=dto.motivo_fallo,
+            partner_id=dto.partner_id,
+            poliza=dto.poliza,
+            servicio=dto.servicio,
+            zona=dto.zona,
         )
         saga._fecha_creacion = dto.fecha_creacion
         saga._fecha_actualizacion = dto.fecha_actualizacion

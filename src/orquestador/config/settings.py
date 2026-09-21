@@ -1,11 +1,4 @@
-"""Configuración por variables de entorno (valores por defecto de desarrollo).
-
-Slice de D para S4 (compensación + Saga Log): trae las variables que hacen
-falta para su parte -- BD propia, y los tópicos de S10/S7 a los que se
-suscribe para compensar y en los que publica las compensaciones. Quien
-ensamble el servicio completo (con el camino feliz de C) añade aquí lo que
-le falte, sin tocar lo de D.
-"""
+"""Configuracion por variables de entorno (valores por defecto de desarrollo)."""
 import os
 
 
@@ -25,23 +18,26 @@ DATABASE_URL = _bd_url()
 
 PULSAR_URL = os.getenv("PULSAR_URL", "pulsar://localhost:6650")
 
-# Tópicos de otros servicios a los que D se suscribe para reaccionar a fallos.
-TOPICO_EVENTOS_REGLAS = os.getenv(
-    "TOPICO_EVENTOS_REGLAS", "persistent://hogar-alpes/siniestros-b2b2c/eventos.reglas"
-)
-TOPICO_EVENTOS_MATCHING = os.getenv(
-    "TOPICO_EVENTOS_MATCHING",
-    "persistent://hogar-alpes/siniestros-b2b2c/eventos.matching",
-)
+NS = "persistent://hogar-alpes/siniestros-b2b2c"
 
-# Tópicos de otros servicios en los que D publica las compensaciones.
-TOPICO_COMANDOS_SINIESTROS = os.getenv(
-    "TOPICO_COMANDOS_SINIESTROS",
-    "persistent://hogar-alpes/siniestros-b2b2c/comandos.siniestros",
+# Topicos de otros servicios a los que el orquestador se suscribe.
+TOPICO_EVENTOS_SINIESTROS = os.getenv(
+    "TOPICO_EVENTOS_SINIESTROS", f"{NS}/eventos.siniestros"
 )
+TOPICO_EVENTOS_REGLAS = os.getenv("TOPICO_EVENTOS_REGLAS", f"{NS}/eventos.reglas")
+TOPICO_EVENTOS_MATCHING = os.getenv("TOPICO_EVENTOS_MATCHING", f"{NS}/eventos.matching")
+
+# Topicos de otros servicios en los que el orquestador publica comandos.
+TOPICO_COMANDOS_SINIESTROS = os.getenv(
+    "TOPICO_COMANDOS_SINIESTROS", f"{NS}/comandos.siniestros"
+)
+TOPICO_COMANDOS_REGLAS = os.getenv("TOPICO_COMANDOS_REGLAS", f"{NS}/comandos.reglas")
 TOPICO_COMANDOS_MATCHING = os.getenv(
-    "TOPICO_COMANDOS_MATCHING",
-    "persistent://hogar-alpes/siniestros-b2b2c/comandos.matching",
+    "TOPICO_COMANDOS_MATCHING", f"{NS}/comandos.matching"
 )
 
 SUSCRIPCION = os.getenv("PULSAR_SUSCRIPCION", "orquestador")
+
+CONSUMIR_EVENTOS_SINIESTROS = os.getenv("CONSUMIR_EVENTOS_SINIESTROS", "true").lower() == "true"
+CONSUMIR_EVENTOS_REGLAS = os.getenv("CONSUMIR_EVENTOS_REGLAS", "true").lower() == "true"
+CONSUMIR_EVENTOS_MATCHING = os.getenv("CONSUMIR_EVENTOS_MATCHING", "true").lower() == "true"

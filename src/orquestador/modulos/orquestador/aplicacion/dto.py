@@ -12,3 +12,9 @@ class SagaDTO(DTO):
     estado: str = None
     proveedor_id: str = None
     motivo_fallo: str = None
+    partner_id: str = None
+    poliza: str = None
+    servicio: str = None
+    zona: str = None
+    fecha_creacion: str = None
+    fecha_actualizacion: str = None

@@ -16,6 +16,10 @@ class RepositorioSagas(Repositorio):
         ...
 
     @abstractmethod
+    def obtener_pendiente(self, partner_id: str, poliza: str) -> Saga | None:
+        ...
+
+    @abstractmethod
     def agregar(self, saga: Saga):
         ...
 

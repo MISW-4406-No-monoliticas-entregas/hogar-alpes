@@ -170,6 +170,21 @@ services:
       timeout: 5s
       retries: 10
 
+  postgres-orquestador:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_ORQUESTADOR_USER:-orquestador}
+      POSTGRES_PASSWORD: ${DB_ORQUESTADOR_PASSWORD:-orquestador}
+      POSTGRES_DB: orquestador
+    volumes:
+      - pgdata-orquestador:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_ORQUESTADOR_USER:-orquestador}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   siniestros:
     build: ./src/siniestros
     restart: on-failure
@@ -280,23 +295,51 @@ services:
         condition: service_started
       matching:
         condition: service_started
+      orquestador:
+        condition: service_started
     environment:
       INTEGRACIONES_URL: http://integraciones:5000
       SINIESTROS_URL: http://siniestros:5000
       REGLAS_URL: http://reglas:5000
       MATCHING_URL: http://matching:5000
-      # Orquestador de sagas (S4): rama en paralelo. Mientras no exista el
-      # servicio `orquestador` en este compose, se deja sin definir y el BFF
-      # responde 501 en GET /siniestros/<id>/estado. Al integrar S4, descomentar:
-      # ORQUESTADOR_URL: http://orquestador:5000
+      ORQUESTADOR_URL: http://orquestador:5000
       TIMEOUT_CONEXION_SEGUNDOS: "2"
       TIMEOUT_LECTURA_SEGUNDOS: "5"
       PORT: "5000"
     ports:
       - "8004:5000"
 
+  orquestador:
+    build: ./src/orquestador
+    restart: on-failure
+    depends_on:
+      postgres-orquestador:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+    environment:
+      DB_HOST: postgres-orquestador
+      DB_PORT: "5432"
+      DB_USER: ${DB_ORQUESTADOR_USER:-orquestador}
+      DB_PASSWORD: ${DB_ORQUESTADOR_PASSWORD:-orquestador}
+      DB_NAME: orquestador
+      PULSAR_URL: pulsar://broker1:6650,broker2:6650
+      TOPICO_EVENTOS_SINIESTROS: persistent://hogar-alpes/siniestros-b2b2c/eventos.siniestros
+      TOPICO_EVENTOS_REGLAS: persistent://hogar-alpes/siniestros-b2b2c/eventos.reglas
+      TOPICO_EVENTOS_MATCHING: persistent://hogar-alpes/siniestros-b2b2c/eventos.matching
+      TOPICO_COMANDOS_SINIESTROS: persistent://hogar-alpes/siniestros-b2b2c/comandos.siniestros
+      TOPICO_COMANDOS_REGLAS: persistent://hogar-alpes/siniestros-b2b2c/comandos.reglas
+      TOPICO_COMANDOS_MATCHING: persistent://hogar-alpes/siniestros-b2b2c/comandos.matching
+      CONSUMIR_EVENTOS_SINIESTROS: "true"
+      CONSUMIR_EVENTOS_REGLAS: "true"
+      CONSUMIR_EVENTOS_MATCHING: "true"
+      PORT: "5000"
+    ports:
+      - "8005:5000"
+
 volumes:
   pgdata-siniestros:
   pgdata-integraciones:
   pgdata-reglas:
   pgdata-matching:
+  pgdata-orquestador:

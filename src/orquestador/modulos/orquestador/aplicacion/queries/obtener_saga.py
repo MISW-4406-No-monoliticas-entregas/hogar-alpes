@@ -1,4 +1,4 @@
-"""Query ObtenerSagaPorSiniestro y su handler (lado de lectura)."""
+"""Queries de lectura del Saga Log."""
 from dataclasses import dataclass
 
 from seedwork.aplicacion.queries import (
@@ -23,3 +23,33 @@ class ObtenerSagaPorSiniestroHandler(QueryHandler):
 @ejecutar_query.register(ObtenerSagaPorSiniestro)
 def _(query: ObtenerSagaPorSiniestro) -> QueryResultado:
     return ObtenerSagaPorSiniestroHandler().handle(query)
+
+
+@dataclass
+class ObtenerSagaPorId(Query):
+    id_saga: str
+
+
+class ObtenerSagaPorIdHandler(QueryHandler):
+    def handle(self, query: ObtenerSagaPorId) -> QueryResultado:
+        return QueryResultado(resultado=vistas.obtener_por_id(query.id_saga))
+
+
+@ejecutar_query.register(ObtenerSagaPorId)
+def _(query: ObtenerSagaPorId) -> QueryResultado:
+    return ObtenerSagaPorIdHandler().handle(query)
+
+
+@dataclass
+class ListarSagas(Query):
+    limite: int = 50
+
+
+class ListarSagasHandler(QueryHandler):
+    def handle(self, query: ListarSagas) -> QueryResultado:
+        return QueryResultado(resultado=vistas.listar(query.limite))
+
+
+@ejecutar_query.register(ListarSagas)
+def _(query: ListarSagas) -> QueryResultado:
+    return ListarSagasHandler().handle(query)

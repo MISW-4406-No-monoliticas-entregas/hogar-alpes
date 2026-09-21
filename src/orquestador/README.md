@@ -1,89 +1,112 @@
-# S4 — Orquestador (slice de D: compensación + Saga Log)
+# S4 - Orquestador de sagas
 
-Este directorio es el servicio **S4 Orquestador** de la Entrega 5, compartido
-entre **C** (camino feliz: `RegistrarSiniestro → ValidarSiniestro →
-AsignarProveedor`) y **D** (camino de fallo: compensación + Saga Log). Viven
-en la misma rama (`feat/s4-orquestador`) pero en archivos separados para
-minimizar conflictos de merge.
+Dirige la transaccion larga de atender un siniestro B2B2C y guarda en que paso
+va cada una. Se reparte entre C (camino feliz) y D (compensacion y Saga Log),
+en archivos separados: `aplicacion/comandos/pasos_felices.py` y
+`aplicacion/comandos/compensaciones.py`.
 
-> **Este commit trae solo la parte de D.** No hay `Dockerfile`, `main.py`,
-> `api/` ni entrada en `docker-compose.yml` todavía — se decidió a propósito
-> para poder construir y probar el Saga Log + la compensación de forma
-> aislada, sin bloquear el trabajo en C. Ensamblar el servicio completo
-> (arrancar los consumidores desde un `main.py`, exponer los `GET` de
-> consulta, Dockerfile, y la entrada en `docker-compose.yml`) es el siguiente
-> paso, una vez el camino feliz de C esté integrado.
+Patron: **orquestacion**, no coreografia. Un solo servicio decide el orden de
+los pasos y persiste el avance en una tabla, en vez de que cada servicio
+reaccione a los eventos de los demas y haya que reconstruir el estado del
+proceso correlacionando varios topicos.
 
-## Qué hay aquí (D)
-
-- **`modulos/orquestador/dominio/entidades.py`** — agregado `Saga` (el Saga
-  Log). **Archivo compartido con C**: trae los métodos de compensación
-  (`iniciar`, `registrar_proveedor_reservado`, `compensar`,
-  `completar_compensacion`) documentados para que C agregue los del camino
-  feliz sin chocar. Avisar antes de tocarlo.
-- **`modulos/orquestador/aplicacion/comandos/compensaciones.py`** — los dos
-  comandos de D: `RegistrarProveedorAsignado` (bookkeeping cuando S7
-  confirma una reserva) y `CompensarSaga` (el camino de fallo completo).
-  El contraparte de C es `pasos_felices.py`, en el mismo directorio.
-- **`modulos/orquestador/infraestructura/`** — persistencia del Saga Log
-  (`saga_log`, tabla propia en la BD de S4), despachador de las
-  compensaciones (`RechazarSiniestro` a `comandos.siniestros`,
-  `LiberarProveedor` a `comandos.matching`), y los consumidores reales de
-  `eventos.reglas` y `eventos.matching`.
-
-## Cómo decide la compensación ("según corresponda")
-
-`CompensarSaga` siempre publica `RechazarSiniestro` (el siniestro no se
-puede completar). Además publica `LiberarProveedor` **solo si** la saga ya
-tenía un `proveedor_id` anotado (`RegistrarProveedorAsignado` lo registra
-cuando llega `ProveedorAsignado` de S7). En el flujo de 3 pasos de esta
-entrega, ninguno de los dos disparadores reales (`SiniestroRechazadoPorReglas`,
-`SinProveedorDisponible`) deja un proveedor reservado —by diseño, esos
-eventos significan justamente que no se llegó a reservar nada—, así que en
-la práctica solo se ve `RechazarSiniestro`. El mecanismo general para
-liberar sí está implementado y probado
-(`test_compensar_con_proveedor_reservado_tambien_libera`), listo para
-cuando la saga tenga un paso posterior a la asignación que pueda fallar.
-
-## Máquina de estados de la saga
+## El flujo
 
 ```
-INICIADA → VALIDANDO → ASIGNANDO → COMPLETADA        (camino feliz, C)
-                                 ↘
-                                  COMPENSANDO → COMPENSADA   (camino de fallo, D)
+POST /sagas
+  -> RegistrarSiniestro   (comandos.siniestros)  PENDIENTE
+S2: SiniestroRegistrado   (eventos.siniestros)   INICIADA
+  -> ValidarSiniestro     (comandos.reglas)      VALIDANDO
+S10: SiniestroAprobado... (eventos.reglas)
+  -> MarcarValidado       (comandos.siniestros)
+  -> AsignarProveedor     (comandos.matching)    ASIGNANDO
+S7: ProveedorAsignado     (eventos.matching)     COMPLETADA
 ```
 
-`CompensarSaga` persiste el paso en **dos transacciones separadas**
-(COMPENSANDO primero, COMPENSADA después) para que una consulta SQL en el
-punto intermedio muestre de verdad `COMPENSANDO` — no es un detalle
-cosmético, es el criterio de aceptación de esta pieza.
+Camino de fallo, desde cualquier punto:
 
-## Por qué existe el Saga Log (para la sustentación)
+```
+S10: SiniestroRechazadoPorReglas   -> COMPENSANDO -> COMPENSADA
+S7:  SinProveedorDisponible        -> COMPENSANDO -> COMPENSADA
+  compensaciones: RechazarSiniestro siempre, LiberarProveedor si habia reserva
+```
 
-El event store de S2 audita correctamente el ciclo de vida del agregado
-`Siniestro`, pero el historial completo del proceso de negocio (registro +
-validación + asignación) está repartido entre tres bounded contexts
-distintos (S2, S10, S7) por diseño — cada uno solo ve su pedazo. El Saga Log
-es el registro transversal que faltaba: **complementa** el event store de
-S2, no lo reemplaza ni lo contamina con eventos que no son del agregado
-`Siniestro`.
+Cuatro servicios participan: S2, S10, S7 y el propio S4.
 
-## Demo con SQL (sin servicio corriendo todavía)
+## Por que la saga arranca en el orquestador
 
-Sin Postgres en este slice, la demostración corre contra SQLite en memoria
-en los tests (SQL real, no un doble):
+El paso de validacion necesita `servicio` y `zona`, y esos dos datos no viajan
+en ningun evento de S2: no los recibe S9 del partner ni los guarda el agregado
+Siniestro. Por eso el orquestador es quien recibe la peticion completa, guarda
+servicio y zona en su fila, y publica el `RegistrarSiniestro`.
+
+Como el id del siniestro lo genera S2, la saga nace en `PENDIENTE` sin
+`siniestro_id` y se correlaciona despues por `(partner_id, poliza)` cuando
+llega `SiniestroRegistrado`. Si no hay saga pendiente para ese par, el evento
+se ignora: ese siniestro entro por otro camino (S9 directo) y no lo dirige el
+orquestador.
+
+**Limite conocido:** correlacionar por poliza funciona porque el par
+(partner, poliza) identifica el reclamo, pero dos peticiones identicas
+seguidas se atienden en orden de llegada. Lo correcto seria un
+`correlation_id` propio del orquestador viajando en el sobre de
+`comandos.siniestros`, que es un campo aditivo con default y por tanto
+compatible hacia atras.
+
+## Saga Log
+
+Una fila por transaccion en la tabla `saga_log`, con el paso actual, el
+estado, el proveedor reservado y el motivo del fallo. Es el registro
+transversal del proceso completo, que hoy vive repartido entre tres bounded
+contexts. Complementa el event store de S2, no lo reemplaza: alli se audita el
+ciclo de vida del agregado Siniestro, aqui el de la transaccion.
+
+Cada avance persiste antes de publicar el comando que sigue, y los pasos que
+tienen dos fases (INICIADA/VALIDANDO y COMPENSANDO/COMPENSADA) usan dos
+transacciones a proposito, para que una consulta en el punto intermedio vea el
+paso de verdad.
+
+## API
+
+```
+POST /sagas                  arranca la transaccion larga (202)
+GET  /sagas/<id_siniestro>   estado de la saga de ese siniestro
+GET  /sagas/por-id/<id_saga> estado por id de saga (util justo despues del POST)
+GET  /sagas?limite=50        las ultimas sagas
+GET  /salud
+```
+
+El BFF consume `GET /sagas/<id_siniestro>` desde `/siniestros/<id>/estado`.
+
+## Correrlo
 
 ```bash
-cd src/orquestador && pip install -r requirements.txt && pytest -v
+docker compose up -d --build
 ```
 
-`tests/test_repositorio_sagas.py::test_consulta_sql_directa_a_la_tabla_saga_log`
-ejercita literalmente el criterio de aceptación: compensa una saga y hace un
-`SELECT paso_actual, estado, motivo_fallo FROM saga_log WHERE siniestro_id = :sid`
-directo, sin pasar por el repositorio.
+El servicio queda en el 8005. Una transaccion completa:
 
-Cuando el servicio esté ensamblado con Postgres real, la misma consulta se
-corre así:
+```bash
+curl -s -X POST http://localhost:8005/sagas \
+  -H 'Content-Type: application/json' \
+  -d '{"partner_id":"seguros-alpes","poliza":"POL-1","monto":500000,
+       "servicio":"plomeria","zona":"bogota-norte",
+       "direccion":{"calle":"Cra 7","ciudad":"Bogota","pais":"CO"}}'
+
+curl -s http://localhost:8005/sagas
+```
+
+Una que compensa, con un monto por encima del tope del partner:
+
+```bash
+curl -s -X POST http://localhost:8005/sagas \
+  -H 'Content-Type: application/json' \
+  -d '{"partner_id":"banco-andes","poliza":"POL-2","monto":5000000,
+       "servicio":"plomeria","zona":"bogota-norte",
+       "direccion":{"calle":"Cra 7","ciudad":"Bogota","pais":"CO"}}'
+```
+
+El Saga Log por SQL:
 
 ```bash
 docker compose exec postgres-orquestador psql -U orquestador -d orquestador \
@@ -96,27 +119,15 @@ docker compose exec postgres-orquestador psql -U orquestador -d orquestador \
 cd src/orquestador && pip install -r requirements.txt && pytest -v
 ```
 
-14 pruebas:
-- `test_saga.py` — dominio aislado (sin BD ni Pulsar): la máquina de
-  estados, la invariante de que solo se compensa una saga `EN_CURSO`, y que
-  la compensación incluye o no `proveedor_id` según corresponda.
-- `test_repositorio_sagas.py` — el repositorio contra SQLite real, incluida
-  la consulta SQL directa del criterio de aceptación.
-- `test_compensaciones.py` — integración de los comandos completos (Unidad
-  de Trabajo + repositorio + despachador de prueba en vez de Pulsar real):
-  idempotencia por `id_mensaje`, "según corresponda", y las dos fases
-  COMPENSANDO→COMPENSADA verificadas contra la fila persistida.
+26 pruebas sobre SQLite real y un despachador espia en vez de Pulsar:
+`test_saga.py` y `test_pasos_felices.py` para el dominio y los comandos de
+cada camino, `test_repositorio_sagas.py` para el repositorio y la consulta SQL
+directa, y `test_compensaciones.py` para la compensacion completa.
 
-## Pendiente para ensamblar el servicio completo
+## Limite conocido
 
-- [ ] `pasos_felices.py` de C (motor de orquestación del camino feliz).
-- [ ] Métodos del camino feliz en `dominio/entidades.py` (avanzar de paso,
-      completar) — coordinarlos con C antes de tocar el archivo.
-- [ ] `main.py` que arranque los 2+ consumidores (los de D ya están listos:
-      `suscribirse_a_eventos_reglas`, `suscribirse_a_eventos_matching`).
-- [ ] `api/` con el `GET` de consulta del Saga Log (`vistas.obtener_por_siniestro`
-      y la query `ObtenerSagaPorSiniestro` ya existen, solo falta el blueprint).
-- [ ] `Dockerfile`, `.dockerignore`, `postgres-orquestador` y la entrada
-      `orquestador` en el `docker-compose.yml` raíz.
-- [ ] Tópicos `comandos.orquestador`/`eventos.orquestador` si el diseño final
-      del camino feliz los necesita (no los usa la parte de D).
+El commit y la publicacion del comando que sigue son dos pasos separados. Si
+el proceso muere entre los dos, la fila queda en el paso anterior y la saga se
+detiene. Se ve en la tabla, pero no se recupera sola. La solucion es el patron
+outbox: escribir el comando saliente en la misma transaccion del agregado y
+que un relay lo publique.
