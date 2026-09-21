@@ -51,9 +51,7 @@ def _al_requerir_validacion(evento: ValidacionRequerida, **kwargs):
 
 
 def _al_requerir_asignacion(evento: AsignacionRequerida, **kwargs):
-    despachador = DespachadorPasosFelices()
-    despachador.publicar_marcar_validado(evento.siniestro_id)
-    despachador.publicar_asignar_proveedor(
+    DespachadorPasosFelices().publicar_asignar_proveedor(
         siniestro_id=evento.siniestro_id,
         servicio=evento.servicio,
         zona=evento.zona,
@@ -62,9 +60,14 @@ def _al_requerir_asignacion(evento: AsignacionRequerida, **kwargs):
 
 def _al_completar_saga(evento: SagaCompletada, **kwargs):
     if evento.proveedor_id:
-        DespachadorPasosFelices().publicar_proveedor_asignado_a_siniestros(
+        despachador = DespachadorPasosFelices()
+        # AsignarProveedor primero: la regla de S2 (ElSiniestroDebeEstarAsignadoParaValidar)
+        # exige que el siniestro ya esté ASIGNADO antes de aceptar MarcarValidado.
+        # Publicarlo al revés deja MarcarValidado reintentando para siempre.
+        despachador.publicar_proveedor_asignado_a_siniestros(
             evento.siniestro_id, evento.proveedor_id
         )
+        despachador.publicar_marcar_validado(evento.siniestro_id)
 
 
 def registrar_handlers():
