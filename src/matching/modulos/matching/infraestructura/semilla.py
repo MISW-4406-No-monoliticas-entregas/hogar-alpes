@@ -28,6 +28,15 @@ _PROVEEDORES = [
     ("Carpintería Pacífico", "carpinteria", "barranquilla", True),
 ]
 
+# Pool de proveedores disponibles para los combos de demo. Matching marca al
+# proveedor como no disponible al asignarlo (un trabajo por proveedor), así que
+# un solo proveedor por combo se agota tras la primera saga feliz. Este pool da
+# holgura para correr la colección/demo muchas veces mostrando COMPLETADA, sin
+# perder el comportamiento de agotamiento bajo carga (escenario E3).
+for _i in range(1, 21):
+    _PROVEEDORES.append((f"Plomería Demo {_i:02d}", "plomeria", "bogota-norte", True))
+    _PROVEEDORES.append((f"Electricistas Demo {_i:02d}", "electricidad", "bogota-norte", True))
+
 
 def sembrar_proveedores(session) -> None:
     """Inserta el catálogo semilla si la tabla está vacía (idempotente)."""

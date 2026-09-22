@@ -1,13 +1,18 @@
 {
   "info": {
     "name": "Hogar de los Alpes - BFF",
-    "description": "Todos los endpoints del BFF (src/bff). El BFF es la interfaz sincrona hacia afuera: la unica pieza autorizada a hacerle HTTP a los demas servicios. Cada request de esta coleccion le pega SOLO al BFF ({{bff_url}}); a que servicio interno le pega el BFF en cada caso esta en la descripcion de cada carpeta y en src/bff/README.md. Cambia {{bff_url}} para apuntar a local (http://localhost:8004) o a GCP.",
+    "description": "Todos los endpoints del BFF (src/bff). El BFF es la interfaz sincrona hacia afuera: la unica pieza autorizada a hacerle HTTP a los demas servicios. Cada request de esta coleccion le pega SOLO al BFF ({{bff_url}}); a que servicio interno le pega el BFF en cada caso esta en la descripcion de cada carpeta y en src/bff/README.md. Cambia {{bff_url}} para apuntar a local (http://{{host}}:8004) o a GCP.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     {
+      "key": "host",
+      "value": "35.184.183.171",
+      "type": "string"
+    },
+    {
       "key": "bff_url",
-      "value": "http://localhost:8004"
+      "value": "http://{{host}}:8004"
     },
     {
       "key": "partnerId",
