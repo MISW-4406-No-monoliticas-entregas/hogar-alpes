@@ -1,0 +1,11 @@
+# Override SOLO para experimentos de escalado horizontal (E1).
+# Libera el puerto host publicado de `siniestros` para poder correr N réplicas
+# (docker compose up --scale siniestros=3). El BFF y los consumidores llegan a
+# S2 por DNS interno (http://siniestros:5000), así que el puerto host no hace
+# falta durante la carga.
+#
+#   docker compose -f docker-compose.yml -f experimentos/docker-compose.escala.yml \
+#       up -d --scale siniestros=3
+services:
+  siniestros:
+    ports: !reset []

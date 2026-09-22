@@ -5,26 +5,91 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "orquestador", "value": "http://localhost:8005" },
-    { "key": "bff", "value": "http://localhost:8004" },
-    { "key": "s2", "value": "http://localhost:8000" },
-    { "key": "s10", "value": "http://localhost:8002" },
-    { "key": "s7", "value": "http://localhost:8003" },
-    { "key": "partnerId", "value": "seguros-alpes" },
-    { "key": "servicioConCobertura", "value": "plomeria" },
-    { "key": "zonaConCobertura", "value": "bogota-norte" },
-    { "key": "montoConCobertura", "value": "500000" },
-    { "key": "servicioSinCobertura", "value": "carpinteria" },
-    { "key": "zonaSinCobertura", "value": "bogota-norte" },
-    { "key": "montoSinCobertura", "value": "300000" },
-    { "key": "polizaConCobertura", "value": "" },
-    { "key": "polizaSinCobertura", "value": "" },
-    { "key": "idSagaConCobertura", "value": "" },
-    { "key": "idSagaSinCobertura", "value": "" },
-    { "key": "idSiniestroConCobertura", "value": "" },
-    { "key": "idSiniestroSinCobertura", "value": "" },
-    { "key": "polizaLegado", "value": "" },
-    { "key": "idSincronizacionLegado", "value": "" }
+    {
+      "key": "host",
+      "value": "35.184.183.171",
+      "type": "string"
+    },
+    {
+      "key": "orquestador",
+      "value": "http://{{host}}:8005"
+    },
+    {
+      "key": "bff",
+      "value": "http://{{host}}:8004"
+    },
+    {
+      "key": "s2",
+      "value": "http://{{host}}:8000"
+    },
+    {
+      "key": "s10",
+      "value": "http://{{host}}:8002"
+    },
+    {
+      "key": "s7",
+      "value": "http://{{host}}:8003"
+    },
+    {
+      "key": "partnerId",
+      "value": "seguros-alpes"
+    },
+    {
+      "key": "servicioConCobertura",
+      "value": "plomeria"
+    },
+    {
+      "key": "zonaConCobertura",
+      "value": "bogota-norte"
+    },
+    {
+      "key": "montoConCobertura",
+      "value": "500000"
+    },
+    {
+      "key": "servicioSinCobertura",
+      "value": "carpinteria"
+    },
+    {
+      "key": "zonaSinCobertura",
+      "value": "bogota-norte"
+    },
+    {
+      "key": "montoSinCobertura",
+      "value": "300000"
+    },
+    {
+      "key": "polizaConCobertura",
+      "value": ""
+    },
+    {
+      "key": "polizaSinCobertura",
+      "value": ""
+    },
+    {
+      "key": "idSagaConCobertura",
+      "value": ""
+    },
+    {
+      "key": "idSagaSinCobertura",
+      "value": ""
+    },
+    {
+      "key": "idSiniestroConCobertura",
+      "value": ""
+    },
+    {
+      "key": "idSiniestroSinCobertura",
+      "value": ""
+    },
+    {
+      "key": "polizaLegado",
+      "value": ""
+    },
+    {
+      "key": "idSincronizacionLegado",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -35,14 +100,25 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('200 OK', () => pm.response.to.have.status(200));"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
             }
           ],
           "request": {
             "method": "GET",
-            "url": { "raw": "{{bff}}/salud", "host": ["{{bff}}"], "path": ["salud"] }
+            "url": {
+              "raw": "{{bff}}/salud",
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "salud"
+              ]
+            }
           }
         },
         {
@@ -50,18 +126,30 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                "const r = pm.response.json();",
-                "['S9 Integraciones','S2 Siniestros','S10 Reglas','S7 Matching','S4 Orquestador'].forEach(s => {",
-                "  pm.test(s + ' arriba', () => pm.expect(r[s].estado).to.eql('ok'));",
-                "});"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "['S9 Integraciones','S2 Siniestros','S10 Reglas','S7 Matching','S4 Orquestador'].forEach(s => {",
+                  "  pm.test(s + ' arriba', () => pm.expect(r[s].estado).to.eql('ok'));",
+                  "});"
+                ]
+              }
             }
           ],
           "request": {
             "method": "GET",
-            "url": { "raw": "{{bff}}/salud/dependencias", "host": ["{{bff}}"], "path": ["salud", "dependencias"] },
+            "url": {
+              "raw": "{{bff}}/salud/dependencias",
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "salud",
+                "dependencias"
+              ]
+            },
             "description": "Los 5 servicios deben quedar 'ok'. Si S4 Orquestador sale 'no_integrado', su rama no esta mezclada a main."
           }
         }
@@ -76,28 +164,47 @@
           "event": [
             {
               "listen": "prerequest",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.collectionVariables.set('polizaConCobertura', 'POL-DEMO-COBERTURA-' + Date.now());"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('polizaConCobertura', 'POL-DEMO-COBERTURA-' + Date.now());"
+                ]
+              }
             },
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
-                "const json = pm.response.json();",
-                "pm.test('paso_actual PENDIENTE', () => pm.expect(json.paso_actual).to.eql('PENDIENTE'));",
-                "if (json.id_saga) { pm.collectionVariables.set('idSagaConCobertura', json.id_saga); }"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
+                  "const json = pm.response.json();",
+                  "pm.test('paso_actual PENDIENTE', () => pm.expect(json.paso_actual).to.eql('PENDIENTE'));",
+                  "if (json.id_saga) { pm.collectionVariables.set('idSagaConCobertura', json.id_saga); }"
+                ]
+              }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"partner_id\": \"{{partnerId}}\",\n  \"poliza\": \"{{polizaConCobertura}}\",\n  \"monto\": {{montoConCobertura}},\n  \"moneda\": \"COP\",\n  \"servicio\": \"{{servicioConCobertura}}\",\n  \"zona\": \"{{zonaConCobertura}}\",\n  \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n}"
             },
-            "url": { "raw": "{{orquestador}}/sagas", "host": ["{{orquestador}}"], "path": ["sagas"] },
+            "url": {
+              "raw": "{{orquestador}}/sagas",
+              "host": [
+                "{{orquestador}}"
+              ],
+              "path": [
+                "sagas"
+              ]
+            },
             "description": "seguros-alpes cubre plomeria/electricidad/carpinteria en bogota-norte (S10) y S7 tiene un proveedor de plomeria disponible ahi -- este caso deberia terminar COMPLETADA."
           }
         },
@@ -106,27 +213,46 @@
           "event": [
             {
               "listen": "prerequest",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.collectionVariables.set('polizaSinCobertura', 'POL-DEMO-SINCOBERTURA-' + Date.now());"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('polizaSinCobertura', 'POL-DEMO-SINCOBERTURA-' + Date.now());"
+                ]
+              }
             },
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
-                "const json = pm.response.json();",
-                "if (json.id_saga) { pm.collectionVariables.set('idSagaSinCobertura', json.id_saga); }"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
+                  "const json = pm.response.json();",
+                  "if (json.id_saga) { pm.collectionVariables.set('idSagaSinCobertura', json.id_saga); }"
+                ]
+              }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"partner_id\": \"{{partnerId}}\",\n  \"poliza\": \"{{polizaSinCobertura}}\",\n  \"monto\": {{montoSinCobertura}},\n  \"moneda\": \"COP\",\n  \"servicio\": \"{{servicioSinCobertura}}\",\n  \"zona\": \"{{zonaSinCobertura}}\",\n  \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n}"
             },
-            "url": { "raw": "{{orquestador}}/sagas", "host": ["{{orquestador}}"], "path": ["sagas"] },
+            "url": {
+              "raw": "{{orquestador}}/sagas",
+              "host": [
+                "{{orquestador}}"
+              ],
+              "path": [
+                "sagas"
+              ]
+            },
             "description": "seguros-alpes tambien cubre carpinteria en bogota-norte (S10 aprueba igual), pero S7 no tiene ningun carpintero disponible ahi -- este caso deberia terminar COMPENSADA (RechazarSiniestro publicado hacia S2)."
           }
         },
@@ -135,16 +261,35 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('400', () => pm.response.to.have.status(400));"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400', () => pm.response.to.have.status(400));"
+                ]
+              }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"partner_id\": \"{{partnerId}}\"\n}" },
-            "url": { "raw": "{{orquestador}}/sagas", "host": ["{{orquestador}}"], "path": ["sagas"] }
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"partner_id\": \"{{partnerId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{orquestador}}/sagas",
+              "host": [
+                "{{orquestador}}"
+              ],
+              "path": [
+                "sagas"
+              ]
+            }
           }
         }
       ]
@@ -158,26 +303,36 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                "const json = pm.response.json();",
-                "if (json.siniestro_id) { pm.collectionVariables.set('idSiniestroConCobertura', json.siniestro_id); }",
-                "pm.test('llego a paso terminal (si dice PENDIENTE/INICIADA/... todavia no, reintenta)', () => {",
-                "  pm.expect(['COMPLETADA', 'COMPENSADA']).to.include(json.paso_actual);",
-                "});",
-                "pm.test('quedo COMPLETADA con proveedor', () => {",
-                "  pm.expect(json.paso_actual).to.eql('COMPLETADA');",
-                "  pm.expect(json.estado).to.eql('OK');",
-                "  pm.expect(json.proveedor_id).to.not.be.null;",
-                "});"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.siniestro_id) { pm.collectionVariables.set('idSiniestroConCobertura', json.siniestro_id); }",
+                  "pm.test('llego a paso terminal (si dice PENDIENTE/INICIADA/... todavia no, reintenta)', () => {",
+                  "  pm.expect(['COMPLETADA', 'COMPENSADA']).to.include(json.paso_actual);",
+                  "});",
+                  "pm.test('quedo COMPLETADA con proveedor', () => {",
+                  "  pm.expect(json.paso_actual).to.eql('COMPLETADA');",
+                  "  pm.expect(json.estado).to.eql('OK');",
+                  "  pm.expect(json.proveedor_id).to.not.be.null;",
+                  "});"
+                ]
+              }
             }
           ],
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{orquestador}}/sagas/por-id/{{idSagaConCobertura}}",
-              "host": ["{{orquestador}}"], "path": ["sagas", "por-id", "{{idSagaConCobertura}}"]
+              "host": [
+                "{{orquestador}}"
+              ],
+              "path": [
+                "sagas",
+                "por-id",
+                "{{idSagaConCobertura}}"
+              ]
             }
           }
         },
@@ -186,23 +341,33 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                "const json = pm.response.json();",
-                "if (json.siniestro_id) { pm.collectionVariables.set('idSiniestroSinCobertura', json.siniestro_id); }",
-                "pm.test('quedo COMPENSADA por falta de proveedor', () => {",
-                "  pm.expect(json.paso_actual).to.eql('COMPENSADA');",
-                "  pm.expect(json.estado).to.eql('FALLIDO');",
-                "  pm.expect(json.motivo_fallo).to.include('proveedor');",
-                "});"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const json = pm.response.json();",
+                  "if (json.siniestro_id) { pm.collectionVariables.set('idSiniestroSinCobertura', json.siniestro_id); }",
+                  "pm.test('quedo COMPENSADA por falta de proveedor', () => {",
+                  "  pm.expect(json.paso_actual).to.eql('COMPENSADA');",
+                  "  pm.expect(json.estado).to.eql('FALLIDO');",
+                  "  pm.expect(json.motivo_fallo).to.include('proveedor');",
+                  "});"
+                ]
+              }
             }
           ],
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{orquestador}}/sagas/por-id/{{idSagaSinCobertura}}",
-              "host": ["{{orquestador}}"], "path": ["sagas", "por-id", "{{idSagaSinCobertura}}"]
+              "host": [
+                "{{orquestador}}"
+              ],
+              "path": [
+                "sagas",
+                "por-id",
+                "{{idSagaSinCobertura}}"
+              ]
             }
           }
         },
@@ -211,19 +376,29 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                "pm.test('coincide con la consulta directa al orquestador', () => {",
-                "  pm.expect(pm.response.json().paso_actual).to.eql('COMPLETADA');",
-                "});"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('coincide con la consulta directa al orquestador', () => {",
+                  "  pm.expect(pm.response.json().paso_actual).to.eql('COMPLETADA');",
+                  "});"
+                ]
+              }
             }
           ],
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{bff}}/siniestros/{{idSiniestroConCobertura}}/estado",
-              "host": ["{{bff}}"], "path": ["siniestros", "{{idSiniestroConCobertura}}", "estado"]
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "siniestros",
+                "{{idSiniestroConCobertura}}",
+                "estado"
+              ]
             },
             "description": "Prueba que el BFF es una puerta real hacia el Saga Log del orquestador, no una copia."
           }
@@ -240,7 +415,14 @@
             "method": "GET",
             "url": {
               "raw": "{{bff}}/partners/{{partnerId}}/siniestros",
-              "host": ["{{bff}}"], "path": ["partners", "{{partnerId}}", "siniestros"]
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}",
+                "siniestros"
+              ]
             }
           }
         },
@@ -250,7 +432,13 @@
             "method": "GET",
             "url": {
               "raw": "{{bff}}/reglas/{{partnerId}}",
-              "host": ["{{bff}}"], "path": ["reglas", "{{partnerId}}"]
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "reglas",
+                "{{partnerId}}"
+              ]
             }
           }
         },
@@ -260,7 +448,13 @@
             "method": "GET",
             "url": {
               "raw": "{{bff}}/siniestros/{{idSiniestroConCobertura}}",
-              "host": ["{{bff}}"], "path": ["siniestros", "{{idSiniestroConCobertura}}"]
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "siniestros",
+                "{{idSiniestroConCobertura}}"
+              ]
             }
           }
         },
@@ -269,17 +463,27 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                "pm.test('estado ASIGNADA', () => pm.expect(pm.response.json().estado).to.eql('ASIGNADA'));"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('estado ASIGNADA', () => pm.expect(pm.response.json().estado).to.eql('ASIGNADA'));"
+                ]
+              }
             }
           ],
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{bff}}/siniestros/{{idSiniestroConCobertura}}/asignacion",
-              "host": ["{{bff}}"], "path": ["siniestros", "{{idSiniestroConCobertura}}", "asignacion"]
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "siniestros",
+                "{{idSiniestroConCobertura}}",
+                "asignacion"
+              ]
             }
           }
         },
@@ -288,18 +492,33 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                "pm.test('es una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('es una lista', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
             }
           ],
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{bff}}/reglas/{{partnerId}}/validaciones?limite=10",
-              "host": ["{{bff}}"], "path": ["reglas", "{{partnerId}}", "validaciones"],
-              "query": [{ "key": "limite", "value": "10" }]
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "reglas",
+                "{{partnerId}}",
+                "validaciones"
+              ],
+              "query": [
+                {
+                  "key": "limite",
+                  "value": "10"
+                }
+              ]
             }
           }
         },
@@ -309,10 +528,21 @@
             "method": "GET",
             "url": {
               "raw": "{{bff}}/proveedores?zona={{zonaConCobertura}}&servicio={{servicioConCobertura}}",
-              "host": ["{{bff}}"], "path": ["proveedores"],
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "proveedores"
+              ],
               "query": [
-                { "key": "zona", "value": "{{zonaConCobertura}}" },
-                { "key": "servicio", "value": "{{servicioConCobertura}}" }
+                {
+                  "key": "zona",
+                  "value": "{{zonaConCobertura}}"
+                },
+                {
+                  "key": "servicio",
+                  "value": "{{servicioConCobertura}}"
+                }
               ]
             }
           }
@@ -328,27 +558,46 @@
           "event": [
             {
               "listen": "prerequest",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.collectionVariables.set('polizaLegado', 'POL-LEGADO-' + Date.now());"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('polizaLegado', 'POL-LEGADO-' + Date.now());"
+                ]
+              }
             },
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
-                "const json = pm.response.json();",
-                "if (json.id_sincronizacion) { pm.collectionVariables.set('idSincronizacionLegado', json.id_sincronizacion); }"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('202 Aceptada', () => pm.response.to.have.status(202));",
+                  "const json = pm.response.json();",
+                  "if (json.id_sincronizacion) { pm.collectionVariables.set('idSincronizacionLegado', json.id_sincronizacion); }"
+                ]
+              }
             }
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"partner_id\": \"{{partnerId}}\",\n  \"siniestro\": {\n    \"numeroReclamo\": \"SA-{{polizaLegado}}\",\n    \"poliza\": \"{{polizaLegado}}\",\n    \"montoEstimado\": 500000,\n    \"moneda\": \"COP\",\n    \"direccion\": {\"calle\": \"Cra 7 # 1-2\", \"ciudad\": \"Bogota\", \"pais\": \"CO\"}\n  }\n}"
             },
-            "url": { "raw": "{{bff}}/siniestros", "host": ["{{bff}}"], "path": ["siniestros"] }
+            "url": {
+              "raw": "{{bff}}/siniestros",
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "siniestros"
+              ]
+            }
           }
         },
         {
@@ -356,17 +605,26 @@
           "event": [
             {
               "listen": "test",
-              "script": { "type": "text/javascript", "exec": [
-                "pm.test('200 OK', () => pm.response.to.have.status(200));",
-                "console.log('id_siniestro sigue null si no hay saga que lo correlacione:', pm.response.json().id_siniestro);"
-              ]}
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "console.log('id_siniestro sigue null si no hay saga que lo correlacione:', pm.response.json().id_siniestro);"
+                ]
+              }
             }
           ],
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{bff}}/sincronizaciones/{{idSincronizacionLegado}}",
-              "host": ["{{bff}}"], "path": ["sincronizaciones", "{{idSincronizacionLegado}}"]
+              "host": [
+                "{{bff}}"
+              ],
+              "path": [
+                "sincronizaciones",
+                "{{idSincronizacionLegado}}"
+              ]
             }
           }
         }
@@ -380,21 +638,49 @@
           "name": "S2 - GET /siniestros/:id",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{s2}}/siniestros/{{idSiniestroConCobertura}}", "host": ["{{s2}}"], "path": ["siniestros", "{{idSiniestroConCobertura}}"] }
+            "url": {
+              "raw": "{{s2}}/siniestros/{{idSiniestroConCobertura}}",
+              "host": [
+                "{{s2}}"
+              ],
+              "path": [
+                "siniestros",
+                "{{idSiniestroConCobertura}}"
+              ]
+            }
           }
         },
         {
           "name": "S10 - GET /partners/:id/reglas",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{s10}}/partners/{{partnerId}}/reglas", "host": ["{{s10}}"], "path": ["partners", "{{partnerId}}", "reglas"] }
+            "url": {
+              "raw": "{{s10}}/partners/{{partnerId}}/reglas",
+              "host": [
+                "{{s10}}"
+              ],
+              "path": [
+                "partners",
+                "{{partnerId}}",
+                "reglas"
+              ]
+            }
           }
         },
         {
           "name": "S7 - GET /asignaciones/:id",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{s7}}/asignaciones/{{idSiniestroConCobertura}}", "host": ["{{s7}}"], "path": ["asignaciones", "{{idSiniestroConCobertura}}"] }
+            "url": {
+              "raw": "{{s7}}/asignaciones/{{idSiniestroConCobertura}}",
+              "host": [
+                "{{s7}}"
+              ],
+              "path": [
+                "asignaciones",
+                "{{idSiniestroConCobertura}}"
+              ]
+            }
           }
         }
       ]
