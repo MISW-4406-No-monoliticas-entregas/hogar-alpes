@@ -1,0 +1,279 @@
+/*
+ * Hogar de los Alpes (AdH)
+ * Contextos acotados AS-IS y sus relaciones
+ *
+ * Fuentes:
+ *  1) EventStorming (Big Picture) del flujo de "Trabajo" B2C (solicitud -> diagnóstico ->
+ *     publicación -> cotización -> ejecución -> pago -> calificación), tomado como fuente
+ *     principal para el lenguaje ubicuo y el detalle de responsabilidades.
+ *  2) Levantamiento previo de dominio/sub-dominios y de los 8 Bounded Contexts reconocidos
+ *     hoy en AdH, usado como esqueleto y completado/ajustado con lo observado en el EventStorming.
+ *  3) hogar-de-los-alpes-to-be.cml, usado como esqueleto de representación (mismo formato de
+ *     Domain/Subdomain/BoundedContext/ContextMap) y como punto de comparación para resaltar
+ *     qué relaciones y patrones son evolución del TO-BE y cuáles ya existen hoy.
+ */
+
+
+/* Dominio y sub-dominios */
+/* Los sub-dominios son una clasificación estratégica del negocio y no cambian entre AS-IS y
+ * TO-BE -salvo ServiciosRecurrentesPorSuscripcion, que es una línea de negocio nueva que solo
+ * existe en el TO-BE-. Lo que sí cambia es CUÁLES sub-dominios ya tienen un Bounded Context
+ * propio hoy y cuáles siguen "huérfanos", absorbidos dentro de otro contexto. */
+
+Domain HogarDeLosAlpes {
+
+	domainVisionStatement = "Conectar a los hogares que necesitan resolver un problema doméstico con profesionales de confianza -verificados y calificados-, orquestando el ciclo de vida completo de cada trabajo (marketplace B2C y siniestros/instalaciones B2B2C con aseguradoras, bancos y comercios), y habilitando la inclusión financiera de los proveedores, todo sobre una plataforma capaz de escalar a nuevos países y nuevas líneas de negocio."
+
+	/* Core Domains
+	 * Capacidades que constituyen la ventaja competitiva del proyecto.
+	 */
+
+	Subdomain GestionDeTrabajos {
+		type = CORE_DOMAIN
+		domainVisionStatement = "Orquestar el ciclo de vida completo de un trabajo -desde su creación hasta el cierre y pago- entendiendo su naturaleza (simple o compuesto por sub-trabajos), construyendo el flujo adecuado de actividades secuenciales, paralelas y bloqueantes, y adaptándose a novedades (re-diagnósticos, cancelaciones, no-shows, disputas) manteniendo un estado consistente para todas las partes involucradas."
+	}
+
+	Subdomain VerificacionYAcreditacionDeProveedores {
+		type = CORE_DOMAIN
+		domainVisionStatement = "Garantizar que todo proveedor (persona natural o empresa) que atienda un hogar haya sido verificado -antecedentes, títulos, certificaciones y, para empresas, cada uno de sus técnicos- habilitándolo únicamente para los servicios y zonas que demostró, y manteniendo su acreditación vigente mediante re-validaciones periódicas. Es la base de la confianza que diferencia a AdH."
+	}
+
+	Subdomain OrquestacionDePartnersB2B2C {
+		type = CORE_DOMAIN
+		domainVisionStatement = "Administrar la relación con aseguradoras, bancos y comercios como 'universos' independientes, aplicando las reglas propias de cada partner (redes de proveedores permitidas, SLAs, montos máximos, pasos de aprobación y auditoría) durante la creación, ejecución y cierre/facturación de los trabajos de siniestros e instalaciones, sincronizando cada novedad con el partner correspondiente."
+	}
+
+	Subdomain AsistenteConversacionalDeDiagnostico {
+		type = CORE_DOMAIN
+		domainVisionStatement = "Guiar al dueño de hogar, mediante un asistente inteligente en lenguaje natural, en el diagnóstico de su problema hasta producir un trabajo bien especificado (categoría, urgencia, ubicación y evidencia), reduciendo fricción y errores en la solicitud del servicio."
+	}
+
+	Subdomain FintechParaProveedores {
+		type = CORE_DOMAIN
+		domainVisionStatement = "Impulsar la inclusión financiera de los proveedores independientes -muchos de ellos no bancarizados- ofreciendo billetera digital y micro-préstamos que usen el historial de trabajos realizados en AdH como fuente propia de scoring crediticio, fortaleciendo la lealtad y el crecimiento de sus negocios."
+	}
+
+	/* Supporting Domains
+	 * Capacidades necesarias para soportar los dominios core.
+	 */
+
+	Subdomain PublicacionYBusquedaDeProveedores {
+		type = SUPPORTING_DOMAIN
+		domainVisionStatement = "Hacer coincidir cada trabajo con los proveedores acreditados que corresponden a su categoría, zona geográfica y disponibilidad, publicándolo para que puedan cotizar."
+	}
+
+	Subdomain CalidadYDisputas {
+		type = SUPPORTING_DOMAIN
+		domainVisionStatement = "Gestionar calificaciones, garantías y disputas de calidad sobre los trabajos ejecutados, alimentando la reputación de los proveedores y protegiendo la confianza del dueño de hogar."
+	}
+
+	Subdomain GestionDeAgentesInternos {
+		type = SUPPORTING_DOMAIN
+		domainVisionStatement = "Proveer a los ~100 agentes de gestión de AdH las herramientas para ejecutar y monitorear manualmente el proceso de verificación de proveedores y el seguimiento operativo de los trabajos, mientras la compañía optimiza estos procesos con IA."
+	}
+
+	Subdomain AlianzasB2B2C {
+		type = SUPPORTING_DOMAIN
+		domainVisionStatement = "Administrar la relación comercial con aseguradoras, bancos y comercios: onboarding de nuevos partners, definición de acuerdos comerciales y condiciones de facturación."
+	}
+
+	Subdomain ExpansionRegionalYLocalizacion {
+		type = SUPPORTING_DOMAIN
+		domainVisionStatement = "Habilitar la operación de AdH en múltiples países (Colombia, México, Brasil, Argentina), gestionando las particularidades de moneda, huso horario, regulación local y partners propios de cada mercado, sin frenar la evolución del resto del negocio."
+	}
+
+	Subdomain RiesgoYCumplimiento {
+		type = SUPPORTING_DOMAIN
+		domainVisionStatement = "Vigilar el cumplimiento normativo y de compliance de la operación (financiera, de datos y de verificación de proveedores) y apoyar la detección de fraude en trabajos, pagos y siniestros."
+	}
+
+	/* Generic Subdomains
+	 * Capacidades estándar y no diferenciadoras.
+	 */
+
+	Subdomain PagosYFacturacion {
+		type = GENERIC_SUBDOMAIN
+		domainVisionStatement = "Procesar los pagos de los clientes del marketplace (con retención hasta el cierre del trabajo) y facturar a los partners B2B2C según su acuerdo comercial."
+	}
+
+	Subdomain FinanzasYTesoreria {
+		type = GENERIC_SUBDOMAIN
+		domainVisionStatement = "Administrar la tesorería y las finanzas corporativas de AdH."
+	}
+
+	Subdomain IdentidadYAcceso {
+		type = GENERIC_SUBDOMAIN
+		domainVisionStatement = "Gestionar la identidad, autenticación y autorización de dueños de hogar, proveedores, agentes de AdH y usuarios de los partners que integran con la plataforma."
+	}
+
+	Subdomain NotificacionesYComunicaciones {
+		type = GENERIC_SUBDOMAIN
+		domainVisionStatement = "Entregar mensajes, alertas y actualizaciones de estado a dueños de hogar, proveedores, agentes y partners a través de los canales apropiados (app, web, email, integraciones)."
+	}
+}
+
+
+/* Sistemas externos */
+/* No estaban documentados en el levantamiento previo, pero el EventStorming confirma que la
+ * pasarela de pagos ya se integra hoy con el trabajo ("Procesar pago en plataforma" ->
+ * "Pasarela de pagos"). Los otros dos sistemas externos se infieren por ser condición necesaria
+ * de responsabilidades ya reconocidas hoy (verificar antecedentes/certificaciones, e integrar a
+ * los +30 partners B2B2C) y se marcan explícitamente como supuesto a validar con el equipo. */
+
+BoundedContext PasarelasDePago {
+	type = SYSTEM
+	domainVisionStatement = "Pasarelas de pago por país y moneda (COP, MXN, BRL, ARS). Confirmado en el EventStorming: el paso 'Procesar pago en plataforma' liquida contra este sistema."
+}
+
+BoundedContext SistemasDePartner {
+	type = SYSTEM
+	domainVisionStatement = "Los sistemas propios de las +30 aseguradoras, bancos y comercios. Modelos heterogéneos que AdH no controla. [Supuesto: no aparece en el EventStorming de esta línea B2C; se infiere porque OrquestacionDePartnersB2B2CContext ya orquesta trabajos de siniestros/instalaciones hoy.]"
+}
+
+BoundedContext SistemasExternosDeVerificacion {
+	type = SYSTEM
+	domainVisionStatement = "Policía/antecedentes, registros empresariales y entidades certificadoras consultados durante la verificación. [Supuesto: no aparece en el EventStorming de esta línea B2C; se infiere de la responsabilidad de verificación de antecedentes y certificaciones ya reconocida hoy.]"
+}
+
+
+/* (AS-IS) — Bounded Contexts */
+/* AdH reconoce hoy 8 Bounded Contexts. GestionDeTrabajosContext es el más grande: concentra el
+ * ciclo de vida completo del trabajo confirmado por el EventStorming (diagnóstico, publicación,
+ * cotización, ejecución, monitoreo por agentes, disputas, calificación y disparo del pago), y
+ * absorbe además la lógica de tres sub-dominios que todavía no tienen límite de contexto propio:
+ * AsistenteConversacionalDeDiagnostico, CalidadYDisputas y GestionDeAgentesInternos. Es el
+ * síntoma central de "Big Ball of Mud" señalado en el reporte de arquitectura. */
+
+/*
+ * Gestión de Trabajos (monolito funcional)
+ */
+
+BoundedContext GestionDeTrabajosContext implements GestionDeTrabajos {
+	type = FEATURE
+	domainVisionStatement = "Contexto monolítico que hoy administra el ciclo de vida completo del trabajo B2C, desde la creación hasta el cierre y pago. Confirmado por EventStorming: describir el problema y diagnosticarlo (lenguaje natural -> trabajo especificado con categoría/urgencia/ubicación/evidencia), publicarlo a proveedores acreditados de la zona, cotizar y comparar ofertas, agendar visitas y re-cotizar ante cambios de alcance, monitorear avance/novedades/disputas, calificar el servicio y calcular la reputación del proveedor. Absorbe sin límite propio la lógica de diagnóstico conversacional, calidad y disputas, y las herramientas de los agentes de gestión."
+	responsibilities = "Diagnóstico del problema y especificación del trabajo (lenguaje natural)", "Publicación del trabajo a proveedores acreditados de la zona", "Cotización, visitas de diagnóstico y re-cotización ante cambio de alcance", "Aprobación adicional para cambios que superen cierto monto", "Monitoreo de avance, novedades y disputas por agentes de gestión", "Registro de disputas y calificación del servicio", "Cálculo de reputación del proveedor", "Disparo del pago hacia PagosYFacturacionContext al finalizar el trabajo"
+}
+
+/*
+ * Verificación y Acreditación
+ */
+
+BoundedContext VerificacionYAcreditacionDeProveedoresContext implements VerificacionYAcreditacionDeProveedores {
+	type = FEATURE
+	domainVisionStatement = "Verificar proveedores, validar certificaciones, habilitar servicios y mantener credenciales vigentes. Es la fuente de la base de datos de profesionales acreditados por labor y zona que consulta la publicación de trabajos."
+}
+
+/*
+ * Publicación y Búsqueda
+ */
+
+BoundedContext PublicacionYBusquedaDeProveedoresContext implements PublicacionYBusquedaDeProveedores {
+	type = FEATURE
+	domainVisionStatement = "Publicar trabajos y emparejar proveedores según categoría, zona y disponibilidad."
+}
+
+/*
+ * Orquestación B2B2C
+ */
+
+BoundedContext OrquestacionDePartnersB2B2CContext implements OrquestacionDePartnersB2B2C, AlianzasB2B2C {
+	type = FEATURE
+	domainVisionStatement = "Administrar reglas de negocio, SLAs y auditoría para aseguradoras, bancos y comercios. Agrupa hoy, sin separación, tanto la ejecución de reglas por partner como la relación comercial (onboarding, acuerdos), que en el TO-BE se dividen en IntegracionesPartnersContext, ReglasDePartnerContext y AlianzasB2B2CContext."
+}
+
+/*
+ * Pagos y Facturación
+ */
+
+BoundedContext PagosYFacturacionContext implements PagosYFacturacion, FinanzasYTesoreria {
+	type = FEATURE
+	domainVisionStatement = "Gestionar pagos, retenciones y facturación a clientes y partners, y la tesorería corporativa. Confirmado por EventStorming: procesa el pago contra la pasarela, retiene el pago hasta que el proveedor finaliza el trabajo, y libera el pago al proveedor una vez finalizado."
+	responsibilities = "Procesamiento de pago contra la pasarela", "Retención de pago hasta el cierre del trabajo", "Liberación de pago al proveedor", "Facturación a partners", "Tesorería"
+}
+
+/*
+ * Identidad y Acceso
+ */
+
+BoundedContext IdentidadYAccesoContext implements IdentidadYAcceso {
+	type = FEATURE
+	domainVisionStatement = "Administrar autenticación, autorización y perfiles de usuarios y proveedores."
+}
+
+/*
+ * Notificaciones y Comunicaciones
+ */
+
+BoundedContext NotificacionesYComunicacionesContext implements NotificacionesYComunicaciones {
+	type = FEATURE
+	domainVisionStatement = "Distribuir mensajes, alertas y comunicaciones transversales a todas las partes."
+}
+
+/*
+ * Fintech para Proveedores
+ */
+
+BoundedContext FintechParaProveedoresContext implements FintechParaProveedores {
+	type = FEATURE
+	domainVisionStatement = "Proveer billetera digital, microcréditos y soporte financiero para proveedores."
+}
+
+
+/* (AS-IS) — Context Map */
+
+ContextMap HogarDeLosAlpesASIS {
+
+	type = SYSTEM_LANDSCAPE
+	state = AS_IS
+
+	contains GestionDeTrabajosContext
+	contains VerificacionYAcreditacionDeProveedoresContext
+	contains PublicacionYBusquedaDeProveedoresContext
+	contains OrquestacionDePartnersB2B2CContext
+	contains PagosYFacturacionContext
+	contains IdentidadYAccesoContext
+	contains NotificacionesYComunicacionesContext
+	contains FintechParaProveedoresContext
+	contains PasarelasDePago
+	contains SistemasDePartner
+	contains SistemasExternosDeVerificacion
+
+	/* Fronteras con sistemas externos (ACL) */
+
+	PasarelasDePago [U] -> [D,ACL] PagosYFacturacionContext
+
+	SistemasDePartner [U] -> [D,ACL] OrquestacionDePartnersB2B2CContext
+
+	SistemasExternosDeVerificacion [U] -> [D,ACL] VerificacionYAcreditacionDeProveedoresContext
+
+	/* Cliente-Proveedor */
+	/* Se modelan como Customer/Supplier -sin OHS/PL- porque hoy no existe un backbone de eventos:
+	 * los contextos aguas abajo consultan directamente al contexto aguas arriba (o su base de
+	 * datos compartida) en lugar de suscribirse a un lenguaje publicado y estable. Publicar
+	 * eventos de dominio (OHS/PL) es precisamente la mejora que introduce el TO-BE. */
+
+	VerificacionYAcreditacionDeProveedoresContext [U,S] -> [D,C] GestionDeTrabajosContext
+
+	VerificacionYAcreditacionDeProveedoresContext [U,S] -> [D,C] PublicacionYBusquedaDeProveedoresContext
+
+	OrquestacionDePartnersB2B2CContext [U,S] -> [D,C] GestionDeTrabajosContext
+
+	GestionDeTrabajosContext [U,S] -> [D,C] PublicacionYBusquedaDeProveedoresContext
+
+	GestionDeTrabajosContext [U,S] -> [D,C] PagosYFacturacionContext
+
+	GestionDeTrabajosContext [U,S] -> [D,C] NotificacionesYComunicacionesContext
+
+	GestionDeTrabajosContext [U,S] -> [D,C] FintechParaProveedoresContext
+
+	PagosYFacturacionContext [U,S] -> [D,C] FintechParaProveedoresContext
+
+	/* Conformist */
+	/* IdentidadYAccesoContext es un servicio transversal de plataforma: los demás contextos no
+	 * negocian su modelo, simplemente lo adoptan. */
+
+	IdentidadYAccesoContext [U] -> [D,CF] GestionDeTrabajosContext
+
+	IdentidadYAccesoContext [U] -> [D,CF] FintechParaProveedoresContext
+
+}

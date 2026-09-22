@@ -1,64 +1,26 @@
 # Diagramas refinados — Entrega 5
 
-Refinamiento de los diagramas de la Entrega 1 (mapa de contexto TO-BE) y la
-Entrega 2 (puntos de vista), **con base en los resultados de la experimentación**
-de la Entrega 5. Cada diagrama está en Mermaid (lo renderiza GitHub y
-[mermaid.live](https://mermaid.live) para capturar/exportar).
+Complemento visual de los refinamientos de la Entrega 5.
+
+> **IMPORTANTE — mapa de contexto TO-BE:** el refinamiento del mapa de contexto
+> se hizo en **Context Mapper (CML)**, igual que en la Entrega 1. El archivo
+> autoritativo es **`hogar-de-los-alpes-to-be-e5.cml`** (en la raíz del repo);
+> ábrelo en Context Mapper para regenerar el diagrama. Cambios aplicados (con su
+> justificación por la experimentación) documentados en el encabezado del `.cml`:
+> **[R1]** Reglas→Siniestros pasa de síncrono a eventos OHS/PL (justificado por la
+> disponibilidad de E3); **[R2]** se agrega el BFF como capa de agregación
+> síncrona; **[R3]** se valida la saga con Saga Log en OrquestacionDeTrabajos.
+>
+> Los diagramas de abajo (despliegue y procesos/saga) son **puntos de vista**
+> complementarios en Mermaid, renderizables en [mermaid.live](https://mermaid.live).
+
+**Imagen generada del mapa de contexto refinado** (render con Graphviz a partir del `.cml`):
+
+![Mapa de contexto TO-BE refinado E5](img/mapa-contexto-to-be-e5.png)
 
 ---
 
-## 1. Mapa de contexto TO-BE (refinado)
-
-**Qué cambió respecto a la Entrega 1 y por qué:**
-- Se agregan dos contextos que introdujo la Entrega 5: el **Orquestador de Sagas
-  (S4)** con su **Saga Log**, y el **BFF** como capa de entrada síncrona.
-- La comunicación entre S2/S10/S7 deja de ser "solo log" (E4) y pasa a ser una
-  **saga orquestada**: S4 coordina los pasos y reacciona a los eventos.
-- Justificación (experimentación): la **orquestación** se eligió sobre coreografía
-  porque el Saga Log —que E3 usó como evidencia de que no quedan transacciones
-  huérfanas— es el rol natural de un orquestador centralizado.
-
-```mermaid
-flowchart TD
-    Cliente["Cliente / Tutor<br/>(HTTP síncrono)"] --> BFF
-    Partner["Sistemas de Partner<br/>(externo · B2B2C)"] -->|POST /partners/&lt;id&gt;/siniestros| S9
-
-    subgraph POC["hogar-alpes / siniestros-b2b2c  (desplegado en GCP)"]
-        BFF["BFF<br/>(API REST de agregación)"]
-        S4["S4 Orquestador<br/>(Saga)"]
-        SL[("Saga Log<br/>PostgreSQL")]
-        S9["S9 Integraciones<br/>(ACL · CRUD)"]
-        S2["S2 Siniestros<br/>(Event Sourcing + CQRS)"]
-        S10["S10 Reglas<br/>(CRUD)"]
-        S7["S7 Matching<br/>(CRUD)"]
-
-        BFF -->|consulta estado saga| S4
-        BFF -->|registra / consulta| S9
-        BFF -->|proyección lectura| S2
-        S4 --- SL
-
-        S4 -->|1 · RegistrarSiniestro| CS[["comandos.siniestros"]]
-        CS --> S2
-        S2 -->|SiniestroRegistrado| ES[["eventos.siniestros"]]
-        ES --> S4
-
-        S4 -->|2 · ValidarSiniestro| CR[["comandos.reglas"]]
-        CR --> S10
-        S10 -->|Aprobado / Rechazado| ER[["eventos.reglas"]]
-        ER --> S4
-
-        S4 -->|3 · AsignarProveedor| CM[["comandos.matching"]]
-        CM --> S7
-        S7 -->|ProveedorAsignado / SinProveedorDisponible| EM[["eventos.matching"]]
-        EM --> S4
-
-        S4 -. compensación .-> CS
-    end
-```
-
----
-
-## 2. Punto de vista — Despliegue (refinado)
+## 1. Punto de vista — Despliegue (refinado)
 
 **Qué cambió y por qué:**
 - Se reemplaza el diagrama local por el **despliegue real en GCP**: una VM con un
@@ -106,7 +68,7 @@ flowchart TB
 
 ---
 
-## 3. Punto de vista — Procesos / Saga (refinado)
+## 2. Punto de vista — Procesos / Saga (refinado)
 
 **Qué cambió y por qué:**
 - Se agrega la **transacción larga** (no existía en E2): el flujo orquestado con su
@@ -147,7 +109,59 @@ sequenceDiagram
 
 ---
 
+> Los dos diagramas de arriba son **vistas previa** en Mermaid. Los puntos de vista
+> de la Entrega 2 están hechos en **draw.io con la plantilla del curso** (header
+> Proyecto/ID/Vista/Tipo + convención de íconos: Servicio, Event Broker, Tópico
+> eventos/comandos, ACL, ADP…). Abajo está el **spec exacto de qué agregar en cada
+> vista** para el refinamiento de E5, en esa misma convención.
+
+---
+
+## Puntos de vista (Entrega 2) — cambios a aplicar en la plantilla del curso
+
+Header sugerido en cada vista: Proyecto = "Hogar de los Alpes", Versión = 2.0,
+y una nota "Refinado E5" con la justificación.
+
+### Vista de Contexto (C&C) — qué agregar
+- **BFF** como `Servicio` (aplicación web/API): es el punto de entrada síncrono;
+  recibe HTTP de los clientes.
+- **S4 Orquestador** como `Servicio`, con su `base de datos` **Saga Log**.
+- Los **tópicos** (si no están): `comandos.siniestros/reglas/matching` (Tópico
+  comandos) y `eventos.siniestros/reglas/matching` (Tópico eventos) sobre el
+  `Event Broker` (Pulsar).
+- Conexiones del BFF a S2/S9/S10/S7/S4 como `Interface request/reply síncrona`.
+- **Justificación (E5):** se agregaron el BFF y el orquestador; el backbone de
+  eventos se validó como táctica de disponibilidad en E3.
+
+### Vista Funcional (C&C) — qué agregar
+- El flujo de la **saga orquestada** por S4:
+  publica **RegistrarSiniestro** (Tópico comandos) → S2 → consume
+  **SiniestroRegistrado** (Tópico eventos) → publica **ValidarSiniestro** → S10 →
+  consume **Aprobado/Rechazado** → publica **AsignarProveedor** → S7 → consume
+  **ProveedorAsignado / SinProveedorDisponible**.
+- El **camino de compensación**: al recibir SinProveedorDisponible, S4 compensa
+  (rechaza/libera) y cierra la saga.
+- El **Saga Log** como `base de datos` del orquestador donde se registra cada paso.
+- **Justificación (E5):** es la transacción larga que E3 y las pruebas
+  no-determinísticas verificaron que siempre llega a un estado terminal (0 huérfanas).
+
+### Vista de Información (Módulo, UML 2.5) — qué agregar
+- Nuevo agregado **`<<Raíz>>` Saga** (el Saga Log) con:
+  - `<<ObjetoValor>>` **PasoSaga** (enum: PENDIENTE, INICIADA, VALIDANDO,
+    ASIGNANDO, COMPLETADA, COMPENSANDO, COMPENSADA).
+  - `<<ObjetoValor>>` **EstadoSaga** (enum: EN_CURSO, OK, FALLIDO).
+  - Atributos de correlación: siniestro_id, partner_id, poliza, servicio, zona,
+    proveedor_id, motivo_fallo.
+- **Justificación (E5):** es el agregado que introdujo el orquestador para
+  registrar y monitorear el proceso de negocio completo.
+
+---
+
 ## Cómo exportar para el documento
 
-1. Abrir [mermaid.live](https://mermaid.live), pegar el bloque, **Export → PNG/SVG**.
-2. O verlos renderizados en GitHub (este archivo) y capturar pantalla.
+1. **Mapa de contexto:** abrir `hogar-de-los-alpes-to-be-e5.cml` en Context Mapper
+   y generar el diagrama (mismo flujo que la Entrega 1).
+2. **Puntos de vista:** aplicar los cambios de arriba en el draw.io de la plantilla
+   del curso y exportar PNG/SVG.
+3. **Vistas Mermaid (apoyo):** [mermaid.live](https://mermaid.live) → Export, o
+   capturar pantalla del render de GitHub.
