@@ -443,9 +443,9 @@ Cada `src/<servicio>/` repite la estructura de los tutoriales 3/5/7 (`api/`,
 | Miembro | Entregable de E5 |
 |---|---|
 | **A · Luis** | Despliegue en GCP, experimentación (3 escenarios) y pruebas con IA, refinamiento de diagramas (CML + vistas) y actualización de este README |
-| **B** | **BFF** (servicio de agregación) y colección Postman |
-| **C** | **S4 Orquestador** — camino feliz de la saga |
-| **D** | **S4 Orquestador** — compensación y **Saga Log** |
+| **B · Sara** | **BFF** (servicio de agregación) y colección Postman |
+| **C · Jesus** | **S4 Orquestador** — camino feliz de la saga |
+| **D · German** | **S4 Orquestador** — compensación y **Saga Log** |
 
 Las contribuciones son visibles en los commits y pull requests de cada rama. La
 base de E4 (S2/S9/S10/S7, infraestructura, plantilla) sigue funcionando sin
